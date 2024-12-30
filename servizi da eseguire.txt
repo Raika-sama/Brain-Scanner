@@ -1,0 +1,41 @@
+Per avviare l'applicazione completa, devi eseguire i seguenti servizi:
+
+Backend (Node.js)
+
+1. Avvia MongoDB
+
+    Se stai usando MongoDB in locale, assicurati che il servizio MongoDB sia avviato. Puoi avviarlo con il comando sudo systemctl start mongod (su Linux/macOS) o tramite il pannello di controllo dei servizi (su Windows).
+    -> Se stai usando MongoDB Atlas, non devi avviare nulla in locale, in quanto il database è già in esecuzione nel cloud.
+
+
+2. Avvia il backend Node.js
+
+    Apri un terminale Git Bash nella cartella server del tuo progetto.
+    Esegui il comando npm start per avviare il server Node.js. ---> NO, ESEGUIRE node app.js
+    Il server dovrebbe essere in ascolto sulla porta 5000 (o sulla porta specificata nel file app.js).
+
+3. Avvia il microservizio Python
+
+        a. Attiva l'ambiente virtuale
+
+        Apri un terminale (Git Bash) nella cartella engines/stili_cognitivi.
+        Esegui il comando source venv/Scripts/activate (su Windows) o source venv/bin/activate (su macOS/Linux).
+        Vedrai il nome dell'ambiente virtuale tra parentesi nel prompt del terminale, ad esempio: (venv) $.
+
+        b. Avvia il microservizio
+
+        Assicurati di essere nell'ambiente virtuale attivato.
+        Esegui il comando python main.py.
+        Il microservizio dovrebbe avviarsi e iniziare ad ascoltare sulla porta specificata nel codice (di default, la porta 5001).
+
+
+4. Avvia il frontend React
+
+    Apri un altro terminale Git Bash nella cartella client del tuo progetto.
+    Esegui il comando npm start per avviare l'applicazione React.
+    L'applicazione dovrebbe essere in esecuzione su http://localhost:3000. (il nome della finestra cambia in 'power shell')
+
+
+PER AVVIARE AMBIENTE VIRTUALE: source venv/Scripts/activate
+
+PEr avviare mongosh mongosh "mongodb+srv://ai4sdb.7leax.mongodb.net/ai4sDB"
