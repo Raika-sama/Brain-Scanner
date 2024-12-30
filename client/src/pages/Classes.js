@@ -1,3 +1,4 @@
+// src/pages/Classes.js
 import React, { useState, useEffect } from 'react';
 import { 
   Box, 
@@ -18,7 +19,7 @@ import {
   Assignment as AssignmentIcon,
   Update as UpdateIcon
 } from '@mui/icons-material';
-import axios from '../utils/axios'; // Assicurati che questo percorso sia corretto
+import axios from '../utils/axios';
 
 // Componente StatCard per le statistiche
 const StatCard = ({ icon: Icon, title, value, color }) => (
@@ -41,15 +42,20 @@ const Classes = () => {
   const [classes, setClasses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Statistiche hardcoded per ora
+  const stats = {
+    totalTests: 25,
+    completedTests: 15,
+    pendingTests: 10
+  };
 
   useEffect(() => {
     const fetchClasses = async () => {
       try {
         setLoading(true);
         const response = await axios.get('/api/classes');
-        if (response.data.success) {
-          setClasses(response.data.data);
-        }
+        setClasses(response.data.data);
       } catch (err) {
         setError('Errore nel caricamento delle classi. Riprova più tardi.');
       } finally {
@@ -105,7 +111,7 @@ const Classes = () => {
           <StatCard
             icon={AssignmentIcon}
             title="Test Completati"
-            value="15" // Sostituire con dati reali
+            value={stats.completedTests}
             color="#FF9800"
           />
         </Grid>
@@ -113,7 +119,7 @@ const Classes = () => {
           <StatCard
             icon={AssignmentIcon}
             title="Test in Attesa"
-            value="3" // Sostituire con dati reali
+            value={stats.pendingTests}
             color="#F44336"
           />
         </Grid>
@@ -137,6 +143,40 @@ const Classes = () => {
                 <Divider />
               </React.Fragment>
             ))}
+          </List>
+        </CardContent>
+      </Card>
+
+      {/* Ultimi Aggiornamenti (Hardcoded per ora) */}
+      <Card>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <UpdateIcon sx={{ mr: 1, color: 'primary.main' }} />
+            <Typography variant="h6">
+              Ultimi Aggiornamenti
+            </Typography>
+          </Box>
+          <List>
+            <ListItem>
+              <ListItemText
+                primary="Nuovo test assegnato"
+                secondary="Il test 'Matematica Base' è stato assegnato alla classe 1A"
+              />
+            </ListItem>
+            <Divider />
+            <ListItem>
+              <ListItemText
+                primary="Completamento Test"
+                secondary="La classe 2B ha completato il test 'Fisica Avanzata'"
+              />
+            </ListItem>
+            <Divider />
+            <ListItem>
+              <ListItemText
+                primary="Nuovi Studenti"
+                secondary="3 nuovi studenti sono stati aggiunti alla classe 1C"
+              />
+            </ListItem>
           </List>
         </CardContent>
       </Card>
