@@ -66,6 +66,19 @@ function Students() {
     address: ''
   });
 
+  // Costanti
+  const STUDENTS_PER_PAGE = 10; // Aggiungi questa riga
+  const GENDER_OPTIONS = [
+    { value: 'M', label: 'Maschio', icon: TbMars },
+    { value: 'F', label: 'Femmina', icon: TbVenus }
+    ];
+  const DEFAULT_FILTER_OPTIONS = {
+    classi: [],
+    sezioni: [],
+    indirizzi: []
+  };
+
+
   // Stati per la paginazione
   const [currentPage, setCurrentPage] = useState(1);
   

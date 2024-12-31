@@ -5,7 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
-
+const filterRoutes = require('./routes/filterRoutes');
 
 // Verifica variabili d'ambiente
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'PORT'];

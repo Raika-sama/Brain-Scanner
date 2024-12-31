@@ -27,9 +27,10 @@ router.get('/options', async (req, res) => {
     
     res.json(filterOptions);
   } catch (error) {
+    console.error('Errore nel recupero delle opzioni di filtro:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Errore nel recupero delle opzioni di filtro' 
+      message: 'Errore nel recupero delle opzioni di filtro'
     });
   }
 });
