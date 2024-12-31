@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Plus, Edit2, Trash2, ChartBar, X } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, ChartBar, X, FileUp } from 'lucide-react';
 import { TbMars, TbVenus } from 'react-icons/tb';
 import { toast } from 'react-hot-toast';
 import axios from '../utils/axios';
 import { Card } from "../components/ui/card";
 import StudentModal from '../components/StudentModal';
+import ImportStudentsModal from '../components/ImportStudentsModal';
+
 
 const Students = () => {
   const navigate = useNavigate();
-  
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
   // Stati base
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -135,6 +138,13 @@ const Students = () => {
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Gestione Studenti</h1>
         <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+        >
+            <FileUp className="w-5 h-5" />
+            Importa Studenti
+        </button>
+        <button
           onClick={handleAddStudent}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
@@ -243,6 +253,10 @@ const Students = () => {
         onSubmit={handleSubmitStudent}
         student={selectedStudent}
       />
+      <ImportStudentsModal 
+        isOpen={isImportModalOpen} 
+        onClose={() => setIsImportModalOpen(false)} 
+        />
     </div>
   );
 };
