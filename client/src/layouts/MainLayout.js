@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { Menu, User, LogOut, Settings } from 'lucide-react';
 import axios from 'axios';
@@ -138,12 +138,15 @@ const MainLayout = () => {
             ${isSidebarOpen ? 'ml-64' : 'ml-20'}`}
         >
           <div className="h-full p-6">
-            <Outlet />
+            <Suspense fallback={<div>Loading...</div>}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
       </div>
     </div>
   );
 };
+
 
 export default MainLayout;

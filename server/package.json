@@ -12,7 +12,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.12.0",
     "mongoose": "^8.9.2",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "react": "^19.0.0"
   },
   "scripts": {
     "start": "react-scripts start",

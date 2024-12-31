@@ -2,11 +2,14 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import MainLayout from './layouts/MainLayout';
-import Dashboard from './pages/Dashboard';  // Aggiungi questo import
+import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import ClassDetail from './pages/ClassDetail';
 import Classes from './pages/Classes';
-import SchoolPage from './pages/SchoolPage';  // Aggiungi questo import
+import SchoolPage from './pages/SchoolPage';
+import Students from './pages/Students';
+// Fix the import path to match component name
+import StudentAnalysis from './pages/students/StudentAnalysis';
 
 const App = () => {  // Corretta la sintassi della dichiarazione
   // Funzione per verificare se l'utente è autenticato
@@ -41,6 +44,8 @@ const App = () => {  // Corretta la sintassi della dichiarazione
           <Route path="schools" element={<SchoolPage />} /> {/* Aggiunta route per schools */}
           <Route path="classes" element={<Classes />} />
           <Route path="classes/:classId" element={<ClassDetail />} />
+          <Route path="students" element={<Students />} /> {/* Aggiungi solo questa riga */}
+          <Route path="/students/:id/analysis" element={<StudentAnalysis />} />
           <Route index element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>

@@ -51,12 +51,15 @@ mongoose.connect(process.env.MONGODB_URI, {
 require('./models/Schools');
 require('./models/Users');
 require('./models/Class');
+require('./models/Student'); // Aggiungi questa riga
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const schoolRoutes = require('./routes/schoolRoutes');
 const classRoutes = require('./routes/classRoutes');
+const studentRoutes = require('./routes/studentRoutes'); // Aggiungi questa riga
+const filterOptionsRoutes = require('./routes/api/filterOptions');
 
 // Middleware di logging
 app.use((req, res, next) => {
@@ -68,7 +71,9 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/schools', schoolRoutes);
-app.use('/api/classes', classRoutes);  // Solo una volta
+app.use('/api/classes', classRoutes);
+app.use('/api/students', studentRoutes); // Aggiungi questa riga
+app.use('/api', filterOptionsRoutes);
 
 // Gestione degli errori
 app.use((err, req, res, next) => {
