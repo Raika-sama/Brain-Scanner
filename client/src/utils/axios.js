@@ -1,9 +1,8 @@
 import axios from 'axios';
-import { API_URL } from '../config';
 
 const instance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
-  timeout: 5000,
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000',
+  timeout: 10000,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -28,6 +27,11 @@ instance.interceptors.response.use(
       localStorage.removeItem('token');
       localStorage.removeItem('userData');
       window.location.href = '/login';
+    }
+    if (!error.response) {
+      // Network or server error
+      console.error('Network Error:', error);
+      return Promise.reject(new Error('Network error - please check your connection'));
     }
     return Promise.reject(error);
   }

@@ -18,35 +18,8 @@ import StudentModal from '../components/StudentModal';
 import { ErrorBoundary } from 'react-error-boundary';
 import MainLayout from '../layouts/MainLayout'; 
 
-// Costanti
 
 
-const STUDENTS_PER_PAGE = 10;
-const GENDER_OPTIONS = [
-  { value: 'M', label: 'Maschio', icon: TbMars },
-  { value: 'F', label: 'Femmina', icon: TbVenus }
-];
-
-const DEFAULT_FILTER_OPTIONS = {
-    classi: [
-      { id: '1', name: '1° Anno' },
-      { id: '2', name: '2° Anno' },
-      { id: '3', name: '3° Anno' },
-      { id: '4', name: '4° Anno' },
-      { id: '5', name: '5° Anno' }
-    ],
-    sezioni: [
-      { id: 'A', name: 'Sezione A' },
-      { id: 'B', name: 'Sezione B' },
-      { id: 'C', name: 'Sezione C' },
-      { id: 'D', name: 'Sezione D' }
-    ],
-    indirizzi: [
-      { id: 'scientifico', name: 'Scientifico' },
-      { id: 'classico', name: 'Classico' },
-      { id: 'linguistico', name: 'Linguistico' }
-    ]
-  };
 
 
 
@@ -125,16 +98,16 @@ function Students() {
   useEffect(() => {
     const fetchFilterOptions = async () => {
       try {
-        const response = await axios.get('../../server/routes/api/filterOptions');
+        // Fix API endpoint path
+        const response = await axios.get('/api/filter/options');  // Changed from '/api/filterptions');  // Changed from '../../server/routes/api/filterOptions'
         setFilterOptions(response.data || DEFAULT_FILTER_OPTIONS);
       } catch (error) {
         console.error('Errore nel caricamento delle opzioni di filtro:', error);
-        // In caso di errore, usa le opzioni predefinite
         setFilterOptions(DEFAULT_FILTER_OPTIONS);
         toast.error('Impossibile caricare le opzioni di filtro. Usando valori predefiniti.');
       }
     };
-  
+
     fetchFilterOptions();
   }, []);
 
@@ -224,7 +197,6 @@ const resetFilters = useCallback(() => {
 
 
 
-  
 // Filtraggio memorizzato degli studenti
 const filteredStudents = useMemo(() => {
   return students.filter(student => {
