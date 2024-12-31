@@ -1,328 +1,240 @@
-import React, { useState, useEffect } from 'react';
-import { Dialog } from '@headlessui/react';
-import { X, Upload, Download, AlertCircle, CheckCircle } from 'lucide-react';
-import { downloadTemplate } from '../utils/excelTemplate'; // Il nuovo file che abbiamo creato
-import { validateExcelFile } from '../utils/excelValidation';
-import axios from 'axios';
+import React, { useState } from 'react';
+import {
+  Box,
+  Button,
+  Text,
+} from '@chakra-ui/react';
+import * as ExcelJS from 'exceljs';
 
-const ImportStudentsModal = ({ isOpen, onClose, onImportComplete }) => {
-  const [user, setUser] = useState(null);
-  const [isValidating, setIsValidating] = useState(false);
-  const [validationResults, setValidationResults] = useState(null);
-  const [activeStep, setActiveStep] = useState('upload'); // 'upload', 'preview', 'complete'
-  const [uploadProgress, setUploadProgress] = useState(0);
+const validateExcelFile = async (file, schoolConfig) => {
+  const workbook = new ExcelJS.Workbook();
+  const validData = [];
+  const errors = [];
 
-  // Carica i dati dell'utente all'apertura del modale
-  useEffect(() => {
-    const fetchUserData = async () => {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    await workbook.xlsx.load(arrayBuffer);
+    
+    const worksheet = workbook.getWorksheet(1);
+    if (!worksheet) {
+      throw new Error('Foglio di lavoro non trovato nel file Excel');
+    }
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return; // Skip header row
+
       try {
-        const token = localStorage.getItem('token');
-        const response = await axios.get('http://localhost:5000/api/users/me', {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
-        
-        if (response.data.success && response.data.user.school) {
-          setUser(response.data.user);
-        } else {
-          setValidationResults({
-            errors: ['Non è stata trovata una scuola associata al tuo account'],
-            validData: []
-          });
+        const studentData = {
+          name: row.getCell(1).text.trim(),
+          surname: row.getCell(2).text.trim(),
+          birthDate: row.getCell(3).text.trim(),
+          fiscalCode: row.getCell(4).text.trim(),
+          class: row.getCell(5).text.trim(),
+          section: row.getCell(6).text.trim(),
+        };
+
+        // Validazione dei dati
+        if (!studentData.name) {
+          errors.push(`Riga ${rowNumber}: Nome mancante`);
+          return;
         }
+        if (!studentData.surname) {
+          errors.push(`Riga ${rowNumber}: Cognome mancante`);
+          return;
+        }
+        if (!studentData.fiscalCode || studentData.fiscalCode.length !== 16) {
+          errors.push(`Riga ${rowNumber}: Codice fiscale non valido`);
+          return;
+        }
+        if (!studentData.class) {
+          errors.push(`Riga ${rowNumber}: Classe mancante`);
+          return;
+        }
+        if (!studentData.section) {
+          errors.push(`Riga ${rowNumber}: Sezione mancante`);
+          return;
+        }
+
+        // Verifica che la classe e sezione siano valide secondo la configurazione della scuola
+        if (schoolConfig && schoolConfig.classes) {
+          const classConfig = schoolConfig.classes.find(
+            c => c.name === studentData.class && c.section === studentData.section
+          );
+          
+          if (!classConfig) {
+            errors.push(`Riga ${rowNumber}: Combinazione classe/sezione non valida`);
+            return;
+          }
+        }
+
+        validData.push(studentData);
       } catch (error) {
-        setValidationResults({
-          errors: ['Errore nel caricamento dei dati della scuola'],
-          validData: []
-        });
+        errors.push(`Errore nella riga ${rowNumber}: ${error.message}`);
       }
-    };
+    });
 
-    if (isOpen) {
-      fetchUserData();
-      setActiveStep('upload');
-      setValidationResults(null);
-      setUploadProgress(0);
-    }
-  }, [isOpen]);
+    return { validData, errors };
+  } catch (error) {
+    throw new Error(`Errore nella lettura del file Excel: ${error.message}`);
+  }
+};
 
-  const handleFileUpload = async (file) => {
-    if (!user?.school) {
-      setValidationResults({
-        errors: ['Non è stata trovata una scuola associata al tuo account'],
-        validData: []
-      });
-      return;
-    }
+const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
+  const [file, setFile] = useState(null);
+  const [validatedData, setValidatedData] = useState(null);
+  const [errors, setErrors] = useState([]);
+  const [notification, setNotification] = useState(null);
 
-    setIsValidating(true);
-    setValidationResults(null);
-    setActiveStep('upload');
-    setUploadProgress(0);
-
-    try {
-      const results = await validateExcelFile(file, user.school);
-      setValidationResults(results);
-      
-      if (results.errors.length === 0) {
-        setActiveStep('preview');
-      }
-      
-      setUploadProgress(100);
-    } catch (error) {
-      setValidationResults({
-        errors: [error.message],
-        validData: []
-      });
-    } finally {
-      setIsValidating(false);
-    }
+  const showNotification = (title, description, status) => {
+    setNotification({ title, description, status });
+    setTimeout(() => setNotification(null), 5000);
   };
 
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    const files = e.dataTransfer.files;
-    if (files.length === 0) return;
-
-    const file = files[0];
-    if (!file.name.endsWith('.xlsx')) {
-      setValidationResults({
-        errors: ['Il file deve essere in formato .xlsx'],
-        validData: []
-      });
-      return;
-    }
-
-    await handleFileUpload(file);
-  };
-
-  const handleDownloadTemplate = async () => {
-    if (!user?.school) {
-      setValidationResults({
-        errors: ['Non è stata trovata una scuola associata al tuo account'],
-        validData: []
-      });
-      return;
-    }
-
-    if (!user.school.tipo_istituto || !user.school.sezioni_disponibili) {
-      setValidationResults({
-        errors: ['La configurazione della scuola è incompleta. Contattare l\'amministratore.'],
-        validData: []
-      });
-      return;
-    }
-
+  const handleFileChange = async (event) => {
+    const selectedFile = event.target.files[0];
+    if (!selectedFile) return;
+    
+    setFile(selectedFile);
+    
     try {
-      await downloadTemplate(user.school);
+      const result = await validateExcelFile(selectedFile, schoolConfig);
+      console.log("Risultato validazione:", result);
+      
+      setValidatedData(result.validData);
+      setErrors(result.errors);
+
+      if (result.validData.length > 0) {
+        showNotification(
+          "Success",
+          `Trovati ${result.validData.length} studenti validi`,
+          'success'
+        );
+      }
     } catch (error) {
-      setValidationResults({
-        errors: ['Errore durante il download del template'],
-        validData: []
-      });
+      setErrors([error.message]);
+      showNotification("Error", error.message, 'error');
     }
   };
 
   const handleImport = async () => {
-    if (!validationResults?.validData || validationResults.validData.length === 0) return;
+    if (!validatedData || validatedData.length === 0) {
+      showNotification("Error", "Nessun dato valido da importare", 'error');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.post(
-        'http://localhost:5000/api/students/batch',
-        {
-          students: validationResults.validData
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-
-      if (response.data.success) {
-        setActiveStep('complete');
-        if (onImportComplete) {
-          onImportComplete();
-        }
-      } else {
-        throw new Error(response.data.message);
+      if (!token) {
+        throw new Error('Token di autenticazione non trovato');
       }
+
+      const response = await fetch('http://localhost:5000/api/students/batch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(validatedData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Errore del server: ${response.status}`);
+      }
+
+      showNotification("Success", "Studenti importati correttamente", 'success');
+      onClose();
     } catch (error) {
-      setValidationResults(prev => ({
-        ...prev,
-        errors: [...(prev.errors || []), 'Errore durante il salvataggio: ' + error.message]
-      }));
+      console.error("Errore:", error);
+      setErrors([error.message]);
+      showNotification("Error", error.message, 'error');
     }
   };
 
-  const renderValidationStatus = () => {
-    if (!validationResults) return null;
-
-    return (
-      <div className="mt-4">
-        {validationResults.errors.length > 0 ? (
-          <div className="bg-red-50 p-4 rounded-lg">
-            <div className="flex items-center mb-2">
-              <AlertCircle className="text-red-500 mr-2" />
-              <h3 className="text-red-700 font-medium">Errori di validazione:</h3>
-            </div>
-            <ul className="list-disc list-inside text-red-600 text-sm">
-              {validationResults.errors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-          </div>
-        ) : (
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="flex items-center">
-              <CheckCircle className="text-green-500 mr-2" />
-              <span className="text-green-700">
-                {validationResults.validRows} studenti pronti per l'importazione
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderPreview = () => {
-    if (!validationResults?.validData) return null;
-
-    return (
-      <div className="mt-4">
-        <h3 className="text-lg font-medium mb-2">Anteprima dati</h3>
-        <div className="max-h-60 overflow-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {['Nome', 'Cognome', 'Sesso', 'Data Nascita', 'Classe', 'Sezione', 'Indirizzo'].map((header) => (
-                  <th
-                    key={header}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                  >
-                    {header}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {validationResults.validData.map((student, index) => (
-                <tr key={index}>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.nome}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.cognome}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.sesso}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.data_nascita}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.classe}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.sezione}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.indirizzo || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  };
+  if (!isOpen) return null;
 
   return (
-    <Dialog open={isOpen} onClose={onClose} className="relative z-50">
-      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-      
-      <div className="fixed inset-0 flex items-center justify-center p-4">
-        <Dialog.Panel className="mx-auto max-w-4xl w-full bg-white rounded-xl shadow-lg">
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <Dialog.Title className="text-lg font-medium text-gray-900">
-              Importa Studenti
-            </Dialog.Title>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-gray-500"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
+    <Box
+      position="fixed"
+      top="0"
+      left="0"
+      right="0"
+      bottom="0"
+      backgroundColor="rgba(0, 0, 0, 0.5)"
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      zIndex={1000}
+    >
+      <Box
+        backgroundColor="white"
+        padding={6}
+        borderRadius="md"
+        maxWidth="500px"
+        width="90%"
+      >
+        <Text fontSize="xl" fontWeight="bold" mb={4}>
+          Importa Studenti da Excel
+        </Text>
 
-          <div className="p-6">
-            {activeStep === 'upload' && (
-              <>
-                <div 
-                  className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-blue-500"
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  onClick={() => document.getElementById('fileInput').click()}
-                >
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-600">
-                    Trascina qui il file Excel o clicca per selezionarlo
-                  </p>
-                  <input
-                    id="fileInput"
-                    type="file"
-                    accept=".xlsx"
-                    onChange={(e) => handleFileUpload(e.target.files[0])}
-                    className="hidden"
-                  />
-                </div>
+        <input
+          type="file"
+          accept=".xlsx"
+          onChange={handleFileChange}
+          style={{ marginBottom: '1rem' }}
+        />
 
-                <div className="flex items-center justify-center mt-4">
-                  <button
-                    onClick={handleDownloadTemplate}
-                    className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
-                  >
-                    <Download className="h-5 w-5" />
-                    Scarica Template
-                  </button>
-                </div>
+        {notification && (
+          <Box
+            mt={4}
+            p={3}
+            borderRadius="md"
+            backgroundColor={notification.status === 'success' ? 'green.100' : 'red.100'}
+          >
+            <Text fontWeight="bold" color={notification.status === 'success' ? 'green.600' : 'red.600'}>
+              {notification.title}
+            </Text>
+            <Text color={notification.status === 'success' ? 'green.600' : 'red.600'}>
+              {notification.description}
+            </Text>
+          </Box>
+        )}
 
-                {renderValidationStatus()}
-              </>
-            )}
+        {errors.length > 0 && (
+          <Box mt={4}>
+            <Text color="red.500" fontWeight="bold">Errori di validazione:</Text>
+            {errors.map((error, index) => (
+              <Text key={index} color="red.500">{error}</Text>
+            ))}
+          </Box>
+        )}
 
-            {activeStep === 'preview' && (
-              <>
-                {renderPreview()}
-                <div className="mt-4 flex justify-end gap-4">
-                  <button
-                    onClick={() => setActiveStep('upload')}
-                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-800"
-                  >
-                    Indietro
-                  </button>
-                  <button
-                    onClick={handleImport}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                  >
-                    Importa
-                  </button>
-                </div>
-              </>
-            )}
+        {validatedData && validatedData.length > 0 && (
+          <Box mt={4}>
+            <Text color="green.500" fontWeight="bold">
+              Studenti validi trovati: {validatedData.length}
+            </Text>
+          </Box>
+        )}
 
-            {activeStep === 'complete' && (
-              <div className="text-center">
-                <CheckCircle className="mx-auto h-12 w-12 text-green-500" />
-                <h3 className="mt-2 text-lg font-medium text-gray-900">
-                  Importazione completata!
-                </h3>
-                <p className="mt-2 text-sm text-gray-500">
-                  {validationResults.validData.length} studenti sono stati importati con successo.
-                </p>
-                <button
-                  onClick={onClose}
-                  className="mt-4 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700"
-                >
-                  Chiudi
-                </button>
-              </div>
-            )}
-          </div>
-        </Dialog.Panel>
-      </div>
-    </Dialog>
+        <Box display="flex" justifyContent="flex-end" mt={6}>
+          <Button 
+            colorScheme="blue" 
+            mr={3} 
+            onClick={handleImport}
+            isDisabled={!validatedData || validatedData.length === 0}
+          >
+            Inserisci Studenti
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={onClose}
+          >
+            Annulla
+          </Button>
+        </Box>
+      </Box>
+    </Box>
   );
 };
 

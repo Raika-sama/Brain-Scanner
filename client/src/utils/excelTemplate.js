@@ -79,11 +79,12 @@ export const createStudentTemplate = async (schoolConfig) => {
 
   // Classe (1-3 o 1-5 in base al tipo_istituto)
   const maxClass = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
+  const classiDisponibili = Array.from({length: maxClass}, (_, i) => (i + 1).toString());
+  
   worksheet.dataValidations.add('E2:E1000', {
-    type: 'whole',
+    type: 'list',
     allowBlank: false,
-    operator: 'between',
-    formulae: ['1', maxClass.toString()]
+    formulae: [`"${classiDisponibili.join(',')}"`]
   });
 
   // Sezione (dalle sezioni disponibili della scuola)
