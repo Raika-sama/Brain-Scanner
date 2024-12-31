@@ -44,18 +44,20 @@ const studentSchema = new mongoose.Schema({
   },
   indirizzo: {
     type: String,
-    required: true,
+    required: false,
     trim: true
   },
   codiceFiscale: {
     type: String,
-    required: true,
+    required: false,
     unique: true,
     trim: true,
     uppercase: true,
     validate: {
       validator: function(v) {
         // Validazione base del codice fiscale (16 caratteri)
+        // Modifichiamo il validatore per accettare anche valori vuoti
+        if (!v) return true;
         return /^[A-Z0-9]{16}$/.test(v);
       },
       message: 'Il codice fiscale deve essere di 16 caratteri alfanumerici'

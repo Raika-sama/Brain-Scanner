@@ -68,12 +68,25 @@ app.use((req, res, next) => {
   next();
 });
 
+
+
+
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/schools', schoolRoutes);
 app.use('/api/classes', classRoutes);
-app.use('/api/students', studentRoutes); // Aggiungi questa riga
+
+// DEBUG rotte studenti
+app.use((req, res, next) => {
+  console.log('Request Headers:', req.headers);
+  console.log('Request Body:', req.body);
+  console.log('Request URL:', req.url);
+  console.log('Request Method:', req.method);
+  next();
+});
+app.use('/api/students', studentRoutes); 
 
 
 // Gestione degli errori

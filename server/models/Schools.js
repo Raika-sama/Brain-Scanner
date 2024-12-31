@@ -27,6 +27,17 @@ const schoolSchema = new mongoose.Schema({
             message: 'Indirizzi scolastici non permessi per scuole di primo grado'
         }
     },
+    
+    sezioni_disponibili: {
+        type: [String],
+        default: ['A', 'B', 'C', 'D', 'E'],  // sezioni di default
+        validate: {
+            validator: function(v) {
+                return v.every(s => /^[A-Z]$/.test(s));  // solo lettere maiuscole
+            },
+            message: 'Le sezioni devono essere lettere maiuscole singole'
+        }
+    },
     regione: {
         type: String,
         required: true

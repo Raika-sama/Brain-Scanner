@@ -64,4 +64,36 @@ router.post('/batch', authMiddleware, async (req, res) => {
     }
 });
 
+router.post('/batch', authMiddleware, async (req, res) => {
+    try {
+      const { students } = req.body;
+  
+      if (!Array.isArray(students) || students.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nessuno studente da importare'
+        });
+      }
+  
+      // Importa gli studenti in batch
+      const result = await Student.insertMany(students, { 
+        ordered: false // Continua anche se ci sono errori
+      });
+  
+      res.status(201).json({
+        success: true,
+        message: `${result.length} studenti importati con successo`,
+        data: result
+      });
+  
+    } catch (error) {
+      console.error('Errore nell\'importazione batch:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Errore nell\'importazione degli studenti',
+        error: error.message
+      });
+    }
+  });
+
 module.exports = router;

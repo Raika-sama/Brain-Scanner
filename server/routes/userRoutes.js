@@ -33,8 +33,13 @@ router.get('/debug-user', authMiddleware, async (req, res) => {
 
 router.get('/me', authMiddleware, async (req, res) => {
   try {
-      const user = await User.findById(req.user.userId)
-          .populate('school');  // Popola i dati della scuola
+    console.log('UserID from token:', req.user.userId); // Verifica l'ID utente  
+    const user = await User.findById(req.user.userId)
+            .populate({
+                path: 'school',
+                select: 'nome tipo_istituto sezioni_disponibili'  // Aggiungiamo sezioni_disponibili
+            });
+      
 
       if (!user) {
           return res.status(404).json({
