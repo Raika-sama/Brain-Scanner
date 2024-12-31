@@ -5,7 +5,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 require('dotenv').config();
-const filterRoutes = require('./routes/filterRoutes');
+
 
 // Verifica variabili d'ambiente
 const requiredEnvVars = ['MONGODB_URI', 'JWT_SECRET', 'PORT'];
@@ -60,7 +60,7 @@ const userRoutes = require('./routes/userRoutes');
 const schoolRoutes = require('./routes/schoolRoutes');
 const classRoutes = require('./routes/classRoutes');
 const studentRoutes = require('./routes/studentRoutes'); // Aggiungi questa riga
-const filterRoutes = require('./routes/filterRoutes');
+
 
 // Middleware di logging
 app.use((req, res, next) => {
@@ -74,7 +74,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/schools', schoolRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/students', studentRoutes); // Aggiungi questa riga
-app.use('/api/filter', filterRoutes);
+
 
 // Gestione degli errori
 app.use((err, req, res, next) => {

@@ -2,6 +2,7 @@
   "name": "server",
   "version": "1.0.0",
   "main": "app.js",
+  "type": "commonjs",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -12,32 +13,13 @@
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.12.0",
     "mongoose": "^8.9.2",
-    "morgan": "^1.10.0",
-    "react": "^19.0.0"
+    "morgan": "^1.10.0"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "node app.js",
     "dev": "nodemon app.js"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
-  {
-    "proxy": "http://localhost:5000"
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }
