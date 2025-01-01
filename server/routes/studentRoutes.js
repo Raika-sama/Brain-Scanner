@@ -101,24 +101,6 @@ router.post('/',
     studentController.createStudent
 );
 
-// Route per l'importazione studenti
-router.post('/import',
-    authMiddleware,
-    [
-        body('students').isArray().withMessage('È richiesto un array di studenti'),
-        body('schoolId').isMongoId().withMessage('ID scuola non valido'),
-        body('teacherId').isMongoId().withMessage('ID insegnante non valido')
-    ],
-    validateRequest,
-    studentController.importStudents
-);
-
-router.post('/batch',
-    authMiddleware,
-    batchValidations,
-    validateRequest,
-    studentController.createBatchStudents
-);
 
 // Rotte PUT
 router.put('/:id',

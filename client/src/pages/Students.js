@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Card } from "../components/ui/card";
 import { FileUp, Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import axios from 'axios';
-import ImportStudentsModal from '../components/ImportStudentsModal';
 import StudentModal from '../components/StudentModal';
 import { toast } from 'react-hot-toast';
 
@@ -146,19 +145,6 @@ const Students = () => {
         <h1 className="text-2xl font-bold text-gray-900">Gestione Studenti</h1>
         <div className="flex gap-2">
           <button
-            onClick={() => {
-              if (!schoolConfig) {
-                toast.error('Configurazione scuola non disponibile');
-                return;
-              }
-              setIsImportModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <FileUp className="w-5 h-5" />
-            Importa Studenti
-          </button>
-          <button
             onClick={handleAddStudent}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
@@ -296,16 +282,7 @@ const Students = () => {
             student={selectedStudent}
             schoolConfig={schoolConfig}
           />
-          
-          <ImportStudentsModal 
-            isOpen={isImportModalOpen} 
-            onClose={() => setIsImportModalOpen(false)}
-            schoolConfig={schoolConfig}
-            onImportComplete={() => {
-              // Ricarica gli studenti dopo l'importazione
-              setCurrentPage(1);
-            }}
-          />
+        
         </>
       )}
     </div>
