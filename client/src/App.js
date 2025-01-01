@@ -9,7 +9,6 @@ import Classes from './pages/Classes';
 import SchoolPage from './pages/SchoolPage';
 import Students from './pages/Students';
 // Fix the import path to match component name
-import StudentAnalysis from './pages/students/StudentAnalysis';
 
 const App = () => {  // Corretta la sintassi della dichiarazione
   // Funzione per verificare se l'utente è autenticato
@@ -45,7 +44,6 @@ const App = () => {  // Corretta la sintassi della dichiarazione
           <Route path="classes" element={<Classes />} />
           <Route path="classes/:classId" element={<ClassDetail />} />
           <Route path="students" element={<Students />} /> {/* Aggiungi solo questa riga */}
-          <Route path="/students/:id/analysis" element={<StudentAnalysis />} />
           <Route index element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>

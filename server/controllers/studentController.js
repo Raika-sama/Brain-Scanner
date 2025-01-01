@@ -1,10 +1,7 @@
 const Student = require('../models/Student');
 const School = require('../models/Schools');
-const ClassService = require('../services/classService');
 const Class = require('../models/Class');
 const mongoose = require('mongoose');
-const { startSession } = require('mongoose');
-const SchoolYearService = require('../services/schoolYearService');
 
 const studentController = {
     
