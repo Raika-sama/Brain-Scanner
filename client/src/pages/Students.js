@@ -106,29 +106,27 @@ const Students = () => {
 
   const handleStudentSubmit = async (data) => {
     try {
+      console.log('Dati ricevuti dal modal:', data); // Per debugging
+
       if (selectedStudent) {
-        const response = await axios.put(`http://localhost:5000/api/students/${selectedStudent._id}`, data);
-        if (response.data.success) {
-          setStudents(prev => prev.map(s => 
-            s._id === selectedStudent._id ? response.data.data : s
-          ));
-          toast.success('Studente modificato con successo');
-        }
+        // Logica per la modifica (la gestiamo dopo)
       } else {
-        const response = await axios.post('http://localhost:5000/api/students', {
-          ...data,
-          school: schoolConfig._id // Aggiungi l'ID della scuola
-        });
+        const response = await axios.post('http://localhost:5000/api/students', data);
+        console.log('Risposta dal server:', response.data); // Per debugging
+
         if (response.data.success) {
-          setStudents(prev => [...prev, response.data.data]);
-          toast.success('Studente aggiunto con successo');
+          // Aggiorna la lista degli studenti
+          const newStudent = response.data.data;
+          setStudents(prev => [...prev, newStudent]);
+          toast.success(response.data.message || 'Studente aggiunto con successo');
         }
       }
       setIsModalOpen(false);
     } catch (error) {
+      console.error('Errore completo:', error.response?.data);
       toast.error(error.response?.data?.message || 'Errore durante il salvataggio');
     }
-  };
+};
 
   if (loading) {
     return (

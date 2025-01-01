@@ -1,19 +1,18 @@
-// server/models/Class.js
 const mongoose = require('mongoose');
 
 const classSchema = new mongoose.Schema({
-    nome: {
+    name: {  // Cambiato da 'nome' a 'numero'
         type: String,
-        required: [true, 'Il nome della classe è obbligatorio'],
+        required: [true, 'Il numero della classe è obbligatorio'],
         trim: true
     },
-    sezione: {
+    section: {
         type: String,
         required: [true, 'La sezione è obbligatoria'],
         trim: true,
         uppercase: true
     },
-    annoScolastico: {
+    schoolYear: {
         type: String,
         required: [true, "L'anno scolastico è obbligatorio"],
         validate: {
@@ -23,48 +22,56 @@ const classSchema = new mongoose.Schema({
             message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
         }
     },
-    scuola: {
+    schoolId: {  // Cambiato da 'scuola' a 'school'
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
         required: [true, 'Il riferimento alla scuola è obbligatorio']
     },
-    studenti: [{
+    specialization: {          // nuovo campo
+        type: String,
+        required: false
+    },
+    students: [{  // Cambiato da 'studenti' a 'students'
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Student'  // Cambiato da 'User' a 'Student'
+        ref: 'Student'
     }],
-    docenti: [{
+    teachers: [{  // Cambiato da 'docenti' a 'teachers'
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }]
 }, {
-    timestamps: true,  // Aggiunge createdAt e updatedAt
+    timestamps: true
 });
 
-// Indici per migliorare le performance delle query
-classSchema.index({ scuola: 1, nome: 1, sezione: 1, annoScolastico: 1 }, { unique: true });
-classSchema.index({ scuola: 1 });
+// Aggiornato l'indice con i nuovi nomi dei campi
+classSchema.index({ schoolId: 1, name: 1, section: 1, schoolYear: 1 }, { unique: true });
+classSchema.index({ schoolId: 1 });
 
-// Metodo per verificare se uno studente è già presente nella classe
+classSchema.virtual('fullName').get(function() {
+    return `${this.name}${this.section}`;
+});
+
+
+// Aggiornato il metodo con il nuovo nome del campo
 classSchema.methods.hasStudent = function(studentId) {
-    return this.studenti.includes(studentId);
+    return this.students.includes(studentId);
 };
 
-// Metodo per aggiungere uno studente evitando duplicati
+// Aggiornato il metodo con il nuovo nome del campo
 classSchema.methods.addStudent = function(studentId) {
     if (!this.hasStudent(studentId)) {
-        this.studenti.push(studentId);
+        this.students.push(studentId);
     }
     return this;
 };
 
-// Virtual per il nome completo della classe (es. "1A")
+// Aggiornato il virtual con il nuovo nome del campo
 classSchema.virtual('nomeCompleto').get(function() {
-    return `${this.nome}${this.sezione}`;
+    return `${this.numero}${this.sezione}`;
 });
 
-// Middleware pre-save per validazioni aggiuntive
+// Middleware pre-save rimane invariato
 classSchema.pre('save', function(next) {
-    // Converti la sezione in maiuscolo
     if (this.sezione) {
         this.sezione = this.sezione.toUpperCase();
     }

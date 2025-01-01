@@ -1,50 +1,55 @@
 const Student = require('../models/Student');
 const School = require('../models/Schools');
 const Class = require('../models/Class');
+const ClassService = require('../services/classService');
 const mongoose = require('mongoose');
 
 const studentController = {
-    
-    
-    
-    // GET - Recupera tutti gli studenti
+    // GET - Recupera tutti gli studenti con filtri
     getStudents: async (req, res) => {
         try {
-            const students = await Student.find({ scuola: req.user.scuola })
-                .populate('classe', 'nome sezione annoScolastico') // Popola i dati della classe
+            const { search, classe, sezione } = req.query;
+            const query = { school: req.user.scuola };
+
+            // Applica i filtri se presenti
+            if (search) {
+                query.$or = [
+                    { nome: new RegExp(search, 'i') },
+                    { cognome: new RegExp(search, 'i') }
+                ];
+            }
+            
+            const students = await Student.find(query)
+                .populate('classe', 'numero sezione annoScolastico')
                 .sort({ cognome: 1, nome: 1 });
-    
-            // Mappiamo i dati per assicurarci che classe e sezione siano stringhe
+
             const formattedStudents = students.map(student => ({
                 _id: student._id,
                 nome: student.nome,
                 cognome: student.cognome,
-                classe: student.classe?.nome || '', // Usa il nome della classe popolata
+                classe: student.classe?.numero || '',
                 sezione: student.classe?.sezione || '',
                 sesso: student.sesso,
-                dataNascita: student.dataNascita,
                 note: student.note
             }));
-    
-            res.json({ 
-                success: true, 
-                data: formattedStudents 
-            });
+
+            res.json({ success: true, data: formattedStudents });
         } catch (error) {
+            console.error('Errore in getStudents:', error);
             res.status(500).json({ 
                 success: false, 
-                message: error.message || 'Errore nel recupero degli studenti' 
+                message: 'Errore nel recupero degli studenti' 
             });
         }
     },
 
-    // GET - Recupera uno studente specifico
+    // GET - Recupera un singolo studente
     getStudent: async (req, res) => {
         try {
             const student = await Student.findOne({
                 _id: req.params.id,
-                scuola: req.user.scuola
-            }).populate('classe', 'nome sezione annoScolastico');
+                school: req.user.scuola
+            }).populate('classe', 'numero sezione annoScolastico');
             
             if (!student) {
                 return res.status(404).json({ 
@@ -52,126 +57,191 @@ const studentController = {
                     message: 'Studente non trovato' 
                 });
             }
+
             res.json({ success: true, data: student });
         } catch (error) {
+            console.error('Errore in getStudent:', error);
             res.status(500).json({ 
                 success: false, 
-                message: error.message || 'Errore nel recupero dello studente' 
-            });
-        }
-    },
-
-    // GET - Recupera l'analisi di uno studente
-    getStudentAnalysis: async (req, res) => {
-        try {
-            const student = await Student.findOne({
-                _id: req.params.id,
-                scuola: req.user.scuola
-            }).populate('classe');
-            
-            if (!student) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: 'Studente non trovato' 
-                });
-            }
-            res.json({ success: true, data: { student, analysis: {} } });
-        } catch (error) {
-            res.status(500).json({ 
-                success: false, 
-                message: error.message || 'Errore nel recupero dell\'analisi' 
+                message: 'Errore nel recupero dello studente' 
             });
         }
     },
 
     // POST - Crea un nuovo studente
     createStudent: async (req, res) => {
-        try {
-            const studentData = {
-                ...req.body,
-                scuola: req.user.scuola,
-                sesso: req.body.sesso.toUpperCase()
-            };
+        const session = await mongoose.startSession();
+        session.startTransaction();
 
-            // Aggiungi il codiceFiscale solo se presente
-            if (req.body.codiceFiscale) {
-                studentData.codiceFiscale = req.body.codiceFiscale.toUpperCase();
+        try {
+            const { nome, cognome, sesso, classe: numeroClasse, sezione, note } = req.body;
+            const scuola = req.user.scuola;
+
+            // Verifica duplicati
+            const existingStudent = await Student.findOne({
+                nome,
+                cognome,
+                school: scuola,
+                'classe.numero': numeroClasse,
+                'classe.sezione': sezione
+            });
+
+            if (existingStudent) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Esiste già uno studente con questo nome e cognome in questa classe'
+                });
             }
 
-            const student = new Student(studentData);
-            const savedStudent = await student.save();
-            
-            res.status(201).json({ 
-                success: true, 
-                data: savedStudent 
+            // Trova o crea la classe
+            const classe = await ClassService.findOrCreateClass({
+                numero: numeroClasse,
+                sezione,
+                annoScolastico: ClassService.getCurrentSchoolYear(),
+                school: scuola
+            }, session);
+
+            // Crea lo studente
+            const student = new Student({
+                nome,
+                cognome,
+                sesso: sesso.toUpperCase(),
+                classe: classe._id,
+                school: scuola,
+                teachers: [req.user._id],
+                note: note || ''
             });
+
+            await student.save({ session });
+
+            // Aggiorna la classe con il nuovo studente
+            await Class.findByIdAndUpdate(
+                classe._id,
+                { $addToSet: { students: student._id } },
+                { session }
+            );
+
+            await session.commitTransaction();
+
+            // Popola i dati per la risposta
+            const populatedStudent = await Student.findById(student._id)
+                .populate('classe', 'numero sezione annoScolastico');
+
+            res.status(201).json({
+                success: true,
+                data: populatedStudent,
+                message: 'Studente creato con successo'
+            });
+
         } catch (error) {
-            res.status(400).json({ 
-                success: false, 
-                message: error.message || 'Errore nella creazione dello studente' 
+            await session.abortTransaction();
+            console.error('Errore in createStudent:', error);
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nella creazione dello studente'
             });
+        } finally {
+            session.endSession();
         }
     },
 
-    // PUT - Aggiorna uno studente esistente
+    // PUT - Aggiorna uno studente
     updateStudent: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-            const updateData = { ...req.body };
-            if (updateData.codiceFiscale) {
-                updateData.codiceFiscale = updateData.codiceFiscale.toUpperCase();
-            }
-            if (updateData.sesso) {
-                updateData.sesso = updateData.sesso.toUpperCase();
+            const { nome, cognome, sesso, classe: numeroClasse, sezione, note } = req.body;
+            
+            // Se viene cambiata la classe, aggiorna le relazioni
+            if (numeroClasse && sezione) {
+                const classe = await ClassService.findOrCreateClass({
+                    numero: numeroClasse,
+                    sezione,
+                    annoScolastico: ClassService.getCurrentSchoolYear(),
+                    school: req.user.scuola
+                }, session);
+
+                // Rimuovi lo studente dalla vecchia classe e aggiungilo alla nuova
+                await Class.updateMany(
+                    { students: req.params.id },
+                    { $pull: { students: req.params.id } },
+                    { session }
+                );
+
+                await Class.findByIdAndUpdate(
+                    classe._id,
+                    { $addToSet: { students: req.params.id } },
+                    { session }
+                );
+
+                req.body.classe = classe._id;
             }
 
             const updatedStudent = await Student.findOneAndUpdate(
-                { _id: req.params.id, scuola: req.user.scuola },
-                updateData,
-                { new: true, runValidators: true }
-            ).populate('classe', 'nome sezione annoScolastico');
+                { _id: req.params.id, school: req.user.scuola },
+                { ...req.body, sesso: sesso?.toUpperCase() },
+                { new: true, runValidators: true, session }
+            ).populate('classe', 'numero sezione annoScolastico');
 
             if (!updatedStudent) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: 'Studente non trovato' 
-                });
+                throw new Error('Studente non trovato');
             }
+
+            await session.commitTransaction();
             res.json({ success: true, data: updatedStudent });
+
         } catch (error) {
-            res.status(400).json({ 
-                success: false, 
-                message: error.message || 'Errore nell\'aggiornamento dello studente' 
+            await session.abortTransaction();
+            console.error('Errore in updateStudent:', error);
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nell\'aggiornamento dello studente'
             });
+        } finally {
+            session.endSession();
         }
     },
 
     // DELETE - Elimina uno studente
     deleteStudent: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-            const deletedStudent = await Student.findOneAndDelete({
+            const student = await Student.findOne({
                 _id: req.params.id,
-                scuola: req.user.scuola
+                school: req.user.scuola
             });
 
-            if (!deletedStudent) {
-                return res.status(404).json({ 
-                    success: false, 
-                    message: 'Studente non trovato' 
-                });
+            if (!student) {
+                throw new Error('Studente non trovato');
             }
-            res.json({ 
-                success: true, 
-                message: 'Studente eliminato con successo' 
-            });
-        } catch (error) {
-            res.status(500).json({ 
-                success: false, 
-                message: error.message || 'Errore nell\'eliminazione dello studente' 
-            });
-        }
-    },
 
-    
+            // Rimuovi lo studente dalla classe
+            await Class.updateMany(
+                { students: student._id },
+                { $pull: { students: student._id } },
+                { session }
+            );
+
+            // Elimina lo studente
+            await student.remove({ session });
+            
+            await session.commitTransaction();
+            res.json({ success: true, message: 'Studente eliminato con successo' });
+
+        } catch (error) {
+            await session.abortTransaction();
+            console.error('Errore in deleteStudent:', error);
+            res.status(500).json({
+                success: false,
+                message: error.message || 'Errore nell\'eliminazione dello studente'
+            });
+        } finally {
+            session.endSession();
+        }
+    }
 };
 
 module.exports = studentController;

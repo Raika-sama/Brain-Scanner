@@ -1,21 +1,18 @@
 const Class = require('../models/Class');
 const School = require('../models/Schools');
+const ClassService = require('../services/classService');
 
 const classController = {
     // GET - Ottieni tutte le classi
     getClasses: async (req, res) => {
         try {
-            const { scuola, annoScolastico } = req.query;
-            const query = {};
+            const query = { schoolId: req.user.scuola };
             
-            if (scuola) query.scuola = scuola;
-            if (annoScolastico) query.annoScolastico = annoScolastico;
-
             const classes = await Class.find(query)
-                .populate('scuola', 'nome tipo_istituto')
-                .populate('studenti', 'nome cognome')
-                .sort({ nome: 1, sezione: 1 });
-
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('students', 'nome cognome')
+                .sort({ name: 1, section: 1 });
+    
             res.json({
                 success: true,
                 data: classes
@@ -24,18 +21,22 @@ const classController = {
             console.error('Errore in getClasses:', error);
             res.status(500).json({
                 success: false,
-                message: 'Errore nel recupero delle classi'
+                message: error.message || 'Errore nel recupero delle classi'
             });
+            }
         }
     },
 
     // GET - Ottieni una classe specifica
     getClass: async (req, res) => {
         try {
-            const classe = await Class.findById(req.params.id)
-                .populate('scuola', 'nome tipo_istituto')
-                .populate('studenti', 'nome cognome')
-                .populate('docenti', 'nome cognome');
+            const classe = await Class.findOne({
+                _id: req.params.id,
+                school: req.user.scuola  // Aggiunto controllo della scuola
+            })
+                .populate('school', 'nome tipo_istituto')
+                .populate('students', 'nome cognome')
+                .populate('teachers', 'nome cognome');  // Cambiato da docenti a teachers
 
             if (!classe) {
                 return res.status(404).json({
@@ -52,7 +53,7 @@ const classController = {
             console.error('Errore in getClass:', error);
             res.status(500).json({
                 success: false,
-                message: 'Errore nel recupero della classe'
+                message: error.message || 'Errore nel recupero della classe'
             });
         }
     },
@@ -60,14 +61,16 @@ const classController = {
     // POST - Crea una nuova classe
     createClass: async (req, res) => {
         try {
-            const { nome, sezione, annoScolastico, scuola } = req.body;
+            const { numero, sezione } = req.body;  // Cambiato da nome a numero
+            const school = req.user.scuola;
+            const annoScolastico = ClassService.getCurrentSchoolYear();
 
             // Verifica se la classe esiste già
             const existingClass = await Class.findOne({
-                nome,
+                numero,          // Cambiato da nome a numero
                 sezione,
                 annoScolastico,
-                scuola
+                school          // Cambiato da scuola a school
             });
 
             if (existingClass) {
@@ -77,7 +80,11 @@ const classController = {
                 });
             }
 
-            const newClass = await Class.create(req.body);
+            const newClass = await Class.create({
+                ...req.body,
+                school,          // Assicurati che venga usata la scuola dell'utente
+                annoScolastico   // Usa l'anno scolastico calcolato
+            });
             
             res.status(201).json({
                 success: true,
@@ -95,8 +102,11 @@ const classController = {
     // PUT - Aggiorna una classe esistente
     updateClass: async (req, res) => {
         try {
-            const updatedClass = await Class.findByIdAndUpdate(
-                req.params.id,
+            const updatedClass = await Class.findOneAndUpdate(
+                {
+                    _id: req.params.id,
+                    school: req.user.scuola  // Aggiungi controllo della scuola
+                },
                 req.body,
                 { new: true, runValidators: true }
             );
@@ -124,7 +134,10 @@ const classController = {
     // DELETE - Elimina una classe
     deleteClass: async (req, res) => {
         try {
-            const deletedClass = await Class.findByIdAndDelete(req.params.id);
+            const deletedClass = await Class.findOneAndDelete({
+                _id: req.params.id,
+                school: req.user.scuola  // Aggiungi controllo della scuola
+            });
 
             if (!deletedClass) {
                 return res.status(404).json({
@@ -141,51 +154,7 @@ const classController = {
             console.error('Errore in deleteClass:', error);
             res.status(500).json({
                 success: false,
-                message: 'Errore nell\'eliminazione della classe'
-            });
-        }
-    },
-
-    // POST - Trova o crea una classe e aggiungi studenti
-    findOrCreateClassWithStudents: async (req, res) => {
-        try {
-            const { nome, sezione, annoScolastico, scuola, studenti } = req.body;
-
-            let classe = await Class.findOne({
-                nome,
-                sezione,
-                annoScolastico,
-                scuola
-            });
-
-            if (!classe) {
-                classe = await Class.create({
-                    nome,
-                    sezione,
-                    annoScolastico,
-                    scuola
-                });
-            }
-
-            // Aggiungi studenti evitando duplicati
-            studenti.forEach(studentId => {
-                if (!classe.hasStudent(studentId)) {
-                    classe.addStudent(studentId);
-                }
-            });
-
-            await classe.save();
-
-            res.json({
-                success: true,
-                data: classe,
-                message: 'Studenti aggiunti alla classe con successo'
-            });
-        } catch (error) {
-            console.error('Errore in findOrCreateClassWithStudents:', error);
-            res.status(400).json({
-                success: false,
-                message: error.message || 'Errore nell\'aggiunta degli studenti alla classe'
+                message: error.message || 'Errore nell\'eliminazione della classe'
             });
         }
     }
