@@ -1,9 +1,8 @@
-const Student = require('../models/Student'); // Dovrai creare anche questo model
-
-
+const Student = require('../models/Student');
+const School = require('../models/Schools');
 
 const studentController = {
-    // GET tutti gli studenti
+    // Metodi esistenti
     getStudents: async (req, res) => {
         try {
             const students = await Student.find();
@@ -16,7 +15,6 @@ const studentController = {
         }
     },
 
-    // GET singolo studente
     getStudent: async (req, res) => {
         try {
             const student = await Student.findById(req.params.id);
@@ -35,7 +33,6 @@ const studentController = {
         }
     },
 
-    // GET analisi studente
     getStudentAnalysis: async (req, res) => {
         try {
             const student = await Student.findById(req.params.id);
@@ -45,7 +42,6 @@ const studentController = {
                     message: 'Studente non trovato' 
                 });
             }
-            // Implementa la logica per l'analisi
             res.json({ success: true, data: { student, analysis: {} } });
         } catch (error) {
             res.status(500).json({ 
@@ -55,7 +51,6 @@ const studentController = {
         }
     },
 
-    // POST nuovo studente
     createStudent: async (req, res) => {
         try {
             const student = new Student(req.body);
@@ -72,7 +67,6 @@ const studentController = {
         }
     },
 
-    // PUT aggiorna studente
     updateStudent: async (req, res) => {
         try {
             const updatedStudent = await Student.findByIdAndUpdate(
@@ -95,7 +89,6 @@ const studentController = {
         }
     },
 
-    // DELETE elimina studente
     deleteStudent: async (req, res) => {
         try {
             const deletedStudent = await Student.findByIdAndDelete(req.params.id);
@@ -113,6 +106,58 @@ const studentController = {
             res.status(500).json({ 
                 success: false, 
                 message: error.message || 'Errore nell\'eliminazione dello studente' 
+            });
+        }
+    },
+
+    // Nuovo metodo per l'importazione batch
+    createBatchStudents: async (req, res) => {
+        try {
+            const { students } = req.body;
+            
+            if (!Array.isArray(students) || students.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Nessuno studente da importare'
+                });
+            }
+
+            // Recupera la configurazione della scuola
+            const school = await School.findById(students[0].school);
+            if (!school) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Scuola non trovata'
+                });
+            }
+
+            // Valida tutti gli studenti
+            const { validStudents, errors } = await Student.validateBatch(students, school);
+
+            if (errors.length > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Errori di validazione',
+                    errors
+                });
+            }
+
+            // Importa gli studenti validi
+            const createdStudents = await Student.insertMany(validStudents, {
+                ordered: false // Continua anche se ci sono errori
+            });
+
+            res.status(201).json({
+                success: true,
+                message: `${createdStudents.length} studenti importati con successo`,
+                data: createdStudents
+            });
+
+        } catch (error) {
+            console.error("Errore nell'importazione batch:", error);
+            res.status(500).json({
+                success: false,
+                message: error.message || "Errore durante l'importazione degli studenti"
             });
         }
     }

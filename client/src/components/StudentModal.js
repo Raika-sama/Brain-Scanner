@@ -1,13 +1,11 @@
-// src/components/students/StudentModal.js
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import PropTypes from 'prop-types';
 import { X } from 'lucide-react';
 import { TbMars, TbVenus } from 'react-icons/tb';
 import { Card } from "./ui/card";
-import axios from '../utils/axios';
 import { toast } from 'react-hot-toast';
 
-const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
+const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   // Stati
   const [formData, setFormData] = useState({
     nome: '',
@@ -21,14 +19,18 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
     note: ''
   });
 
-  const [schoolOptions, setSchoolOptions] = useState({
-    classi: [],
-    sezioni: [],
-    indirizzi: []
-  });
-
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Opzioni della scuola derivate dalla configurazione
+  const schoolOptions = useMemo(() => ({
+    classi: Array.from(
+      { length: schoolConfig?.tipo_istituto === 'primo_grado' ? 3 : 5 }, 
+      (_, i) => ({ id: (i + 1).toString(), name: (i + 1).toString() })
+    ),
+    sezioni: schoolConfig?.sezioni_disponibili.map(s => ({ id: s, name: s })) || [],
+    indirizzi: schoolConfig?.indirizzo_scolastico?.map(i => ({ id: i, name: i })) || []
+  }), [schoolConfig]);
 
   // Effetti
   useEffect(() => {
@@ -44,36 +46,13 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
         sesso: '',
         dataNascita: '',
         classe: '',
-        sezione: '',
+        sezione: schoolConfig?.sezioni_disponibili[0] || '',
         indirizzo: '',
         codiceFiscale: '',
         note: ''
       });
     }
-  }, [student]);
-
-  useEffect(() => {
-    if (isOpen) {
-      const controller = new AbortController();
-      
-      const fetchSchoolOptions = async () => {
-        try {
-          const response = await axios.get('/api/school/options', {
-            signal: controller.signal
-          });
-          setSchoolOptions(response.data);
-        } catch (error) {
-          if (!axios.isCancel(error)) {
-            console.error('Errore nel caricamento delle opzioni:', error);
-            toast.error('Errore nel caricamento delle opzioni della scuola');
-          }
-        }
-      };
-
-      fetchSchoolOptions();
-      return () => controller.abort();
-    }
-  }, [isOpen]);
+  }, [student, schoolConfig]);
 
   // Validazioni
   const validateCodiceFiscale = useCallback((cf) => {
@@ -92,13 +71,25 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
     if (!formData.classe) newErrors.classe = 'La classe è obbligatoria';
     if (!formData.sezione) newErrors.sezione = 'La sezione è obbligatoria';
     
+    // Validazione sezione
+    if (formData.sezione && !schoolConfig.sezioni_disponibili.includes(formData.sezione)) {
+      newErrors.sezione = 'Sezione non valida per questa scuola';
+    }
+
+    // Validazione classe
+    const classeNum = parseInt(formData.classe);
+    const maxClasse = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
+    if (classeNum < 1 || classeNum > maxClasse) {
+      newErrors.classe = `La classe deve essere tra 1 e ${maxClasse}`;
+    }
+    
     if (formData.codiceFiscale && !validateCodiceFiscale(formData.codiceFiscale)) {
       newErrors.codiceFiscale = 'Codice fiscale non valido';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  }, [formData, validateCodiceFiscale]);
+  }, [formData, validateCodiceFiscale, schoolConfig]);
 
   // Handlers
   const handleChange = useCallback((e) => {
@@ -121,7 +112,11 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
     
     setIsLoading(true);
     try {
-      await onSubmit(formData);
+      await onSubmit({
+        ...formData,
+        school: schoolConfig._id // Aggiungi il riferimento alla scuola
+      });
+      toast.success(student ? 'Studente modificato con successo' : 'Studente aggiunto con successo');
       onClose();
     } catch (error) {
       console.error('Errore durante il salvataggio:', error);
@@ -131,48 +126,9 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
     }
   };
 
-  // Componenti
-  const SelectField = useMemo(() => ({ 
-    options, 
-    value, 
-    onChange, 
-    name, 
-    label, 
-    required, 
-    error 
-  }) => (
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label} {required && '*'}
-      </label>
-      <select
-        name={name}
-        value={value}
-        onChange={onChange}
-        required={required}
-        disabled={isLoading}
-        className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500
-                   disabled:bg-gray-100 disabled:cursor-not-allowed
-                   ${error ? 'border-red-500' : 'border-gray-300'}`}
-      >
-        <option value="">Seleziona...</option>
-        {options.length === 0 ? (
-          <option value="" disabled>Nessun dato disponibile</option>
-        ) : (
-          options.map(option => (
-            <option key={option.id} value={option.id}>
-              {option.name}
-            </option>
-          ))
-        )}
-      </select>
-      {error && (
-        <p className="mt-1 text-sm text-red-500">{error}</p>
-      )}
-    </div>
-  ), [isLoading]);
-
   if (!isOpen) return null;
+
+  // ... continuazione del StudentModal
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
@@ -285,34 +241,77 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
 
             {/* Classe, Sezione e Indirizzo */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <SelectField
-                options={schoolOptions.classi}
-                value={formData.classe}
-                onChange={handleChange}
-                name="classe"
-                label="Classe"
-                required
-                error={errors.classe}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Classe *
+                </label>
+                <select
+                  name="classe"
+                  value={formData.classe}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                  className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500
+                            disabled:bg-gray-100 disabled:cursor-not-allowed
+                            ${errors.classe ? 'border-red-500' : 'border-gray-300'}`}
+                >
+                  <option value="">Seleziona...</option>
+                  {schoolOptions.classi.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.classe && (
+                  <p className="mt-1 text-sm text-red-500">{errors.classe}</p>
+                )}
+              </div>
               
-              <SelectField
-                options={schoolOptions.sezioni}
-                value={formData.sezione}
-                onChange={handleChange}
-                name="sezione"
-                label="Sezione"
-                required
-                error={errors.sezione}
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Sezione *
+                </label>
+                <select
+                  name="sezione"
+                  value={formData.sezione}
+                  onChange={handleChange}
+                  disabled={isLoading}
+                  className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500
+                            disabled:bg-gray-100 disabled:cursor-not-allowed
+                            ${errors.sezione ? 'border-red-500' : 'border-gray-300'}`}
+                >
+                  <option value="">Seleziona...</option>
+                  {schoolOptions.sezioni.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.sezione && (
+                  <p className="mt-1 text-sm text-red-500">{errors.sezione}</p>
+                )}
+              </div>
               
-              <SelectField
-                options={schoolOptions.indirizzi}
-                value={formData.indirizzo}
-                onChange={handleChange}
-                name="indirizzo"
-                label="Indirizzo"
-                error={errors.indirizzo}
-              />
+              {schoolOptions.indirizzi.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Indirizzo
+                  </label>
+                  <select
+                    name="indirizzo"
+                    value={formData.indirizzo}
+                    onChange={handleChange}
+                    disabled={isLoading}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Seleziona...</option>
+                    {schoolOptions.indirizzi.map(option => (
+                      <option key={option.id} value={option.id}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
 
             {/* Codice Fiscale */}
@@ -337,37 +336,20 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
               )}
             </div>
 
-{/* Note */}
-<div>
+            {/* Note */}
+            <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Note (opzionale)
               </label>
               <textarea
                 name="note"
-                disabled={isLoading}
                 value={formData.note}
                 onChange={handleChange}
+                disabled={isLoading}
                 rows="3"
-                className="w-full p-2 border border-gray-300 rounded-md 
-                         focus:ring-blue-500 focus:border-blue-500
-                         disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
               />
             </div>
-
-            {/* Errori del form */}
-            {Object.keys(errors).length > 0 && (
-              <div className="rounded-md bg-red-50 p-4">
-                <div className="flex">
-                  <div className="text-sm text-red-700">
-                    <ul className="list-disc pl-5 space-y-1">
-                      {Object.values(errors).map((error, index) => (
-                        <li key={index}>{error}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Pulsanti */}
             <div className="flex justify-end space-x-3 pt-4">
@@ -375,31 +357,20 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
                 type="button"
                 onClick={onClose}
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-gray-700 
-                         bg-white border border-gray-300 rounded-md 
-                         hover:bg-gray-50 disabled:bg-gray-100 
-                         disabled:cursor-not-allowed"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:bg-gray-100 disabled:cursor-not-allowed"
               >
                 Annulla
               </button>
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-4 py-2 text-sm font-medium text-white 
-                         bg-blue-600 rounded-md hover:bg-blue-700
-                         disabled:bg-blue-400 disabled:cursor-not-allowed
-                         focus:outline-none focus:ring-2 focus:ring-offset-2 
-                         focus:ring-blue-500"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 {isLoading ? (
                   <div className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" 
-                         xmlns="http://www.w3.org/2000/svg" fill="none" 
-                         viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" 
-                              stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" 
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                     </svg>
                     Salvataggio...
                   </div>
@@ -411,30 +382,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit }) => {
       </div>
     </div>
   );
-};
-
-// PropTypes
-StudentModal.propTypes = {
-  isOpen: PropTypes.bool.isRequired,
-  onClose: PropTypes.func.isRequired,
-  student: PropTypes.shape({
-    _id: PropTypes.string,
-    nome: PropTypes.string,
-    cognome: PropTypes.string,
-    sesso: PropTypes.oneOf(['M', 'F']),
-    dataNascita: PropTypes.string,
-    classe: PropTypes.string,
-    sezione: PropTypes.string,
-    indirizzo: PropTypes.string,
-    codiceFiscale: PropTypes.string,
-    note: PropTypes.string
-  }),
-  onSubmit: PropTypes.func.isRequired
-};
-
-// Default Props
-StudentModal.defaultProps = {
-  student: null
 };
 
 export default StudentModal;

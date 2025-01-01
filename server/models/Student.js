@@ -91,12 +91,72 @@ studentSchema.virtual('nomeCompleto').get(function() {
   return `${this.cognome} ${this.nome}`;
 });
 
-// Middleware pre-save per la formattazione
-studentSchema.pre('save', function(next) {
-  this.codiceFiscale = this.codiceFiscale.toUpperCase();
-  next();
-});
 
-const Student = mongoose.model('Student', studentSchema);
-
-module.exports = Student;
+// AGGIUNGI QUI IL NUOVO METODO DI VALIDAZIONE BATCH
+studentSchema.statics.validateBatch = async function(students, schoolConfig) {
+    const errors = [];
+    const validStudents = [];
+  
+    for (let i = 0; i < students.length; i++) {
+      const student = students[i];
+      try {
+        // Validazione base
+        if (!student.nome || !student.cognome || !student.sesso || 
+            !student.dataNascita || !student.classe || !student.sezione) {
+          errors.push(`Riga ${i + 1}: Dati obbligatori mancanti`);
+          continue;
+        }
+  
+        // Validazione classe in base al tipo di istituto
+        const classeNum = parseInt(student.classe);
+        const maxClasse = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
+        if (isNaN(classeNum) || classeNum < 1 || classeNum > maxClasse) {
+          errors.push(`Riga ${i + 1}: Classe non valida per questo tipo di istituto`);
+          continue;
+        }
+  
+        // Validazione sezione
+        if (!schoolConfig.sezioni_disponibili.includes(student.sezione)) {
+          errors.push(`Riga ${i + 1}: Sezione non valida per questa scuola`);
+          continue;
+        }
+  
+        // Validazione codice fiscale se presente
+        if (student.codiceFiscale) {
+          if (!/^[A-Z0-9]{16}$/.test(student.codiceFiscale.toUpperCase())) {
+            errors.push(`Riga ${i + 1}: Codice fiscale non valido`);
+            continue;
+          }
+          // Verifica duplicati
+          const existingStudent = await this.findOne({ codiceFiscale: student.codiceFiscale.toUpperCase() });
+          if (existingStudent) {
+            errors.push(`Riga ${i + 1}: Codice fiscale già presente nel database`);
+            continue;
+          }
+        }
+  
+        validStudents.push({
+          ...student,
+          codiceFiscale: student.codiceFiscale?.toUpperCase(),
+          dataNascita: new Date(student.dataNascita)
+        });
+  
+      } catch (error) {
+        errors.push(`Riga ${i + 1}: ${error.message}`);
+      }
+    }
+  
+    return { validStudents, errors };
+  };
+  
+  // Middleware pre-save per la formattazione
+  studentSchema.pre('save', function(next) {
+    this.codiceFiscale = this.codiceFiscale?.toUpperCase();
+    next();
+  });
+  
+  // ... (il resto del codice rimane invariato)
+  
+  const Student = mongoose.model('Student', studentSchema);
+  
+  module.exports = Student;
