@@ -5,6 +5,7 @@ import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import ImportPreviewModal from './ImportPreviewModal';
 import axios from 'axios';  // <- Aggiungi questa riga
+import { downloadTemplate } from '../utils/excelTemplate';
 
 const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
   const [file, setFile] = useState(null);
@@ -12,7 +13,14 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
   const [currentStep, setCurrentStep] = useState('upload'); // 'upload', 'preview'
   const [validatedData, setValidatedData] = useState(null);
   const [errors, setErrors] = useState([]);
-  const user = JSON.parse(localStorage.getItem('user')); // Otteniamo l'utente autenticato
+  const user = JSON.parse(localStorage.getItem('userData')); // Otteniamo l'utente autenticato
+        console.log('User data in ImportStudentsModal:', {
+            userId: user._id,
+            scuola: user.school,
+            ruolo: user.ruolo,
+            nome: user.nome,
+            cognome: user.cognome
+        });
 
   const importStudents = async (data) => {
     try {
@@ -102,9 +110,9 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
     const requiredColumns = [
       'nome',
       'cognome',
+      'sesso',
       'classe',
-      'sezione',
-      'sesso'
+      'sezione'
     ];
 
     const headers = Object.keys(data[0] || {});
@@ -214,39 +222,11 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
     }
   };
 
-  // Template di esempio
-  const downloadTemplate = () => {
-    const template = XLSX.utils.book_new();
-    const data = [
-      {
-        nome: 'Mario',
-        cognome: 'Rossi',
-        classe: '1',
-        sezione: schoolConfig.sezioni_disponibili[0],
-        sesso: 'M'
-      },
-      {
-        nome: 'Anna',
-        cognome: 'Verdi',
-        classe: '1',
-        sezione: schoolConfig.sezioni_disponibili[0],
-        sesso: 'F'
-      }
-    ];
-    
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Aggiungi intestazione con info
-    XLSX.utils.sheet_add_aoa(ws, [
-      [`Template Import Studenti - ${schoolConfig.nome}`],
-      [`Tipo Istituto: ${schoolConfig.tipo_istituto === 'primo_grado' ? 'Scuola Media' : 'Scuola Superiore'}`],
-      [`Sezioni disponibili: ${schoolConfig.sezioni_disponibili.join(', ')}`],
-      [],  // riga vuota
-    ], { origin: 'A1' });
-
-    XLSX.utils.book_append_sheet(template, ws, 'Studenti');
-    XLSX.writeFile(template, `template_studenti_${schoolConfig.nome}.xlsx`);
+  // Funzione per scaricare il template
+  const handleDownloadTemplate = () => {
+        downloadTemplate(schoolConfig);
   };
+    
 // Render del componente
 if (!isOpen) return null;
 
@@ -363,7 +343,7 @@ return (
             {/* Actions */}
             <div className="flex justify-between items-center pt-4 border-t">
               <button
-                onClick={downloadTemplate}
+                onClick={handleDownloadTemplate}
                 className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors disabled:opacity-50"
                 disabled={isLoading}
               >

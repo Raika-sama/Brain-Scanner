@@ -7,18 +7,11 @@ export const createStudentTemplate = async (schoolConfig) => {
   
   const worksheet = workbook.addWorksheet('Studenti');
   
-  // Definizione colonne
-  worksheet.columns = [
-    { header: 'Nome *', key: 'nome', width: 15 },
-    { header: 'Cognome *', key: 'cognome', width: 15 },
-    { header: 'Sesso *', key: 'sesso', width: 10 },
-    { header: 'Classe *', key: 'classe', width: 10 },
-    { header: 'Sezione *', key: 'sezione', width: 10 },
-    { header: 'Note', key: 'note', width: 30 }
-  ];
+  // Definizione colonne con intestazioni
+  const headers = ['Nome', 'Cognome', 'Sesso', 'Classe', 'Sezione', 'Note'];
+  const headerRow = worksheet.addRow(headers);
 
   // Stile intestazioni
-  const headerRow = worksheet.getRow(1);
   headerRow.font = { bold: true };
   headerRow.fill = {
     type: 'pattern',
@@ -26,11 +19,22 @@ export const createStudentTemplate = async (schoolConfig) => {
     fgColor: { argb: 'FFE0E0E0' }
   };
 
+  // Imposta larghezza colonne
+  worksheet.columns = [
+    { width: 15 }, // Nome
+    { width: 15 }, // Cognome
+    { width: 10 }, // Sesso
+    { width: 10 }, // Classe
+    { width: 10 }, // Sezione
+    { width: 30 }  // Note
+  ];
+
   // Validazioni fino a 1000 righe
   const LAST_ROW = 1000;
+  const START_ROW = 2; // Inizia dalla seconda riga
 
   // Sesso (M/F)
-  worksheet.dataValidations.add(`C2:C${LAST_ROW}`, {
+  worksheet.dataValidations.add(`C${START_ROW}:C${LAST_ROW}`, {
     type: 'list',
     allowBlank: false,
     formulae: ['"M,F"'],
@@ -44,7 +48,7 @@ export const createStudentTemplate = async (schoolConfig) => {
   const maxClass = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
   const classiDisponibili = Array.from({length: maxClass}, (_, i) => (i + 1).toString());
   
-  worksheet.dataValidations.add(`D2:D${LAST_ROW}`, {
+  worksheet.dataValidations.add(`D${START_ROW}:D${LAST_ROW}`, {
     type: 'list',
     allowBlank: false,
     formulae: [`"${classiDisponibili.join(',')}"`],
@@ -55,7 +59,7 @@ export const createStudentTemplate = async (schoolConfig) => {
   });
 
   // Sezione (in base alle sezioni disponibili della scuola)
-  worksheet.dataValidations.add(`E2:E${LAST_ROW}`, {
+  worksheet.dataValidations.add(`E${START_ROW}:E${LAST_ROW}`, {
     type: 'list',
     allowBlank: false,
     formulae: [`"${schoolConfig.sezioni_disponibili.join(',')}"`],
@@ -66,15 +70,14 @@ export const createStudentTemplate = async (schoolConfig) => {
   });
 
   // Riga di esempio
-  const annoCorrente = new Date().getFullYear();
-  const exampleRow = worksheet.addRow({
-    nome: 'Mario',
-    cognome: 'Rossi',
-    sesso: 'M',
-    classe: '1',
-    sezione: schoolConfig.sezioni_disponibili[0],
-    note: 'Esempio nota'
-  });
+  const exampleRow = worksheet.addRow([
+    'Mario',
+    'Rossi',
+    'M',
+    '1',
+    schoolConfig.sezioni_disponibili[0],
+    'Esempio nota'
+  ]);
 
   // Stile riga di esempio
   exampleRow.font = {

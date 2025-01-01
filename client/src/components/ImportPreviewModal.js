@@ -13,7 +13,14 @@ const ImportPreviewModal = ({
   schoolConfig 
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const user = JSON.parse(localStorage.getItem('user')); // Otteniamo l'utente autenticato
+  const user = JSON.parse(localStorage.getItem('userData')); // Otteniamo l'utente autenticato
+    console.log('User data in ImportPreviewModal:', {
+        userId: user._id,
+        scuola: user.school,
+        ruolo: user.ruolo,
+        nome: user.nome,
+        cognome: user.cognome
+    });
 
   // Raggruppamento degli studenti per classe
   const studentsByClass = useMemo(() => {
