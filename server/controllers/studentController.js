@@ -3,6 +3,8 @@ const School = require('../models/Schools');
 const ClassService = require('../services/classService');
 const Class = require('../models/Class');
 const mongoose = require('mongoose');
+const { startSession } = require('mongoose');
+const SchoolYearService = require('../services/schoolYearService');
 
 const studentController = {
     
@@ -15,13 +17,19 @@ const studentController = {
             const { students, schoolId, teacherId } = req.body;
             
             // Verifica la scuola
-            const school = await School.findById(schoolId);
+            const school = await School.findById(schoolId).session(session);
             if (!school) {
                 throw new Error('Scuola non trovata');
             }
 
-            const currentSchoolYear = ClassService.getCurrentSchoolYear();
-            const importedStudents = [];
+            const currentSchoolYear = SchoolYearService.getCurrentSchoolYear();
+            const results = {
+                imported: 0,
+                updated: 0,
+                errors: [],
+                classesCreated: new Set(),
+                classesUpdated: new Set()
+            };
 
             // Raggruppa studenti per classe
             const studentsByClass = students.reduce((acc, student) => {
@@ -35,59 +43,115 @@ const studentController = {
             for (const [classKey, classStudents] of Object.entries(studentsByClass)) {
                 const [classNumber, section] = classKey.split('-');
 
-                // Valida la classe rispetto al tipo di scuola
-                if (!ClassService.validateClassNumber(classNumber, school.tipo_istituto)) {
-                    throw new Error(`Classe ${classNumber} non valida per questo tipo di scuola`);
-                }
+                try {
+                    // Valida la classe rispetto al tipo di scuola
+                    if (!ClassService.validateClassNumber(classNumber, school.tipo_istituto)) {
+                        throw new Error(`Classe ${classNumber} non valida per questo tipo di scuola`);
+                    }
 
-                // Verifica che la sezione sia tra quelle disponibili
-                if (!school.sezioni_disponibili.includes(section)) {
-                    throw new Error(`Sezione ${section} non disponibile`);
-                }
+                    // Verifica che la sezione sia tra quelle disponibili
+                    if (!school.sezioni_disponibili.includes(section)) {
+                        throw new Error(`Sezione ${section} non disponibile`);
+                    }
 
-                // Trova o crea la classe
-                const classObj = await ClassService.findOrCreateClass({
-                    nome: classNumber,
-                    sezione: section,
-                    annoScolastico: currentSchoolYear,
-                    scuola: schoolId
-                }, session);
+                    // Usa findOrCreateClassWithStudents
+                    const classData = {
+                        nome: classNumber,
+                        sezione: section,
+                        annoScolastico: currentSchoolYear,
+                        scuola: schoolId
+                    };
 
-                // Crea gli studenti
-                for (const studentData of classStudents) {
-                    const newStudent = new Student({
-                        nome: studentData.nome,
-                        cognome: studentData.cognome,
-                        sesso: studentData.sesso.toUpperCase(),
-                        classe: classObj._id,
-                        school: schoolId,
-                        teachers: [teacherId],
-                        note: studentData.note || ''
+                    // Trova o crea la classe
+                    let classObj = await Class.findOne({
+                        ...classData
+                    }).session(session);
+
+                    if (!classObj) {
+                        classObj = await Class.create([classData], { session });
+                        classObj = classObj[0];
+                        results.classesCreated.add(classKey);
+                    } else {
+                        results.classesUpdated.add(classKey);
+                    }
+
+                    // Processa gli studenti
+                    for (const studentData of classStudents) {
+                        try {
+                            const newStudent = new Student({
+                                nome: studentData.nome,
+                                cognome: studentData.cognome,
+                                sesso: studentData.sesso.toUpperCase(),
+                                classe: classObj._id,
+                                school: schoolId,
+                                teachers: [teacherId],
+                                note: studentData.note || ''
+                            });
+
+                            await newStudent.save({ session });
+                            
+                            if (!classObj.studenti.includes(newStudent._id)) {
+                                classObj.studenti.push(newStudent._id);
+                            }
+                            
+                            results.imported++;
+                        } catch (error) {
+                            results.errors.push({
+                                student: `${studentData.cognome} ${studentData.nome}`,
+                                error: error.message
+                            });
+                        }
+                    }
+
+                    // Salva la classe aggiornata
+                    await classObj.save({ session });
+
+                } catch (error) {
+                    results.errors.push({
+                        class: classKey,
+                        error: error.message
                     });
-
-                    await newStudent.save({ session });
-                    classObj.studenti.push(newStudent._id);
-                    importedStudents.push(newStudent);
                 }
-
-                // Aggiorna la classe con i nuovi studenti
-                await classObj.save({ session });
             }
 
-            await session.commitTransaction();
-            
-            res.json({
-                success: true,
-                message: 'Importazione completata con successo',
-                data: {
-                    totalImported: importedStudents.length,
-                    students: importedStudents
-                }
-            });
+            // Gestione risultati finali
+            if (results.errors.length > 0 && results.imported > 0) {
+                // Successo parziale
+                await session.commitTransaction();
+                res.status(207).json({
+                    success: true,
+                    data: {
+                        ...results,
+                        classesCreated: Array.from(results.classesCreated),
+                        classesUpdated: Array.from(results.classesUpdated)
+                    },
+                    message: 'Importazione completata con alcuni errori'
+                });
+            } else if (results.errors.length > 0) {
+                // Solo errori
+                await session.abortTransaction();
+                res.status(400).json({
+                    success: false,
+                    errors: results.errors,
+                    message: 'Importazione fallita'
+                });
+            } else {
+                // Successo completo
+                await session.commitTransaction();
+                res.status(200).json({
+                    success: true,
+                    data: {
+                        ...results,
+                        classesCreated: Array.from(results.classesCreated),
+                        classesUpdated: Array.from(results.classesUpdated)
+                    },
+                    message: 'Importazione completata con successo'
+                });
+            }
 
         } catch (error) {
             await session.abortTransaction();
-            res.status(400).json({
+            res.status(500).json({
                 success: false,
                 message: error.message || 'Errore durante l\'importazione'
             });
