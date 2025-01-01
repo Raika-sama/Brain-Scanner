@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .welcome {
+            margin: 0;
+        }
+        .logout-btn {
+            padding: 8px 16px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .logout-btn:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="header">
+            <h1 class="welcome">Benvenuto, <%= admin.nome %> <%= admin.cognome %></h1>
+            <a href="/admin/logout" class="logout-btn">Logout</a>
+        </div>
+        <div class="content">
+            <p>Email: <%= admin.email %></p>
+            <p>Ruolo: <%= admin.ruolo %></p>
+            <p>Ultimo accesso: <%= admin.lastLogin ? new Date(admin.lastLogin).toLocaleString() : 'Mai' %></p>
+        </div>
+    </div>
+</body>
+</html>

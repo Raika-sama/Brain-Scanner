@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Errore</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        .error-container {
+            text-align: center;
+            padding: 20px;
+        }
+        .error-message {
+            color: #dc3545;
+            margin-bottom: 20px;
+        }
+        .back-link {
+            color: #007bff;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1 class="error-message"><%= error %></h1>
+        <a href="/admin/login" class="back-link">Torna al login</a>
+    </div>
+</body>
+</html>

@@ -1,13 +1,5 @@
 // server/models/User.js
-//mongoose.Schema: Definisce la struttura del documento utente nel database.
-//nome, cognome, email, password: Campi stringa obbligatori.
-//email: Deve essere univoca, per evitare utenti duplicati.
-//ruolo: Campo stringa che definisce il ruolo dell'utente. Può assumere solo i valori studente, insegnante o amministratore. Il valore di default è studente.
-//mongoose.model: Crea un modello Mongoose chiamato User basato sullo schema userSchema.
-//module.exports: Esporta il modello User in modo che possa essere utilizzato in altri file.
-
 const mongoose = require('mongoose');
-
 
 const userSchema = new mongoose.Schema({
   nome: {
@@ -29,15 +21,39 @@ const userSchema = new mongoose.Schema({
   },
   ruolo: {
     type: String,
-    enum: ['studente', 'insegnante', 'amministratore'], // Definisce i ruoli possibili
-    default: 'studente'
+    enum: ['studente', 'insegnante', 'amministratore', 'superadmin'], // Aggiungiamo superadmin
+    default: 'studente',
+    required: true
   },
   school: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'School'  // Riferimento al modello School
-  }
-}, { timestamps: true});
+  },
+  lastLogin: Date
+}, { timestamps: true });
+
+// Metodo virtuale per verificare se l'utente è admin
+userSchema.virtual('isAdmin').get(function() {
+  return this.ruolo === 'amministratore' || this.ruolo === 'superadmin';
+});
+
+// Metodo per verificare i permessi admin
+userSchema.methods.hasAdminAccess = function() {
+  return this.isAdmin;
+};
+
+// Metodo per verificare i permessi superadmin
+userSchema.methods.isSuperAdmin = function() {
+  return this.ruolo === 'superadmin';
+};
+
+// Assicurati che le proprietà virtuali siano incluse quando converti in JSON
+userSchema.set('toJSON', {
+  virtuals: true
+});
+
+userSchema.set('toObject', {
+  virtuals: true
+});
 
 module.exports = mongoose.model('User', userSchema);
-
-
