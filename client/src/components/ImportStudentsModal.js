@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Card } from "../ui/card";
 import { X, Upload } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
+import { Card } from "./ui/card";
+import { downloadTemplate } from '../utils/excelTemplate';
 
 const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
   const [file, setFile] = useState(null);
@@ -17,19 +18,39 @@ const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
     const errors = [];
     const validData = [];
 
+    // Debug - stampa i dati grezzi
+    console.log('Dati Excel grezzi:', data);
+
     data.forEach((row, index) => {
-      const rowNumber = index + 2; // +2 perché la prima riga è l'header e Excel parte da 1
+      const rowNumber = index + 2;
+     // Debug - stampa ogni riga
+     console.log(`Riga ${rowNumber}:`, row);
+     
+     
+      // Converti la data da formato Excel a stringa
+      let formattedDate = row.dataNascita;
+      if (typeof row.dataNascita === 'number') {
+        // Converti il numero seriale Excel in data
+        const date = new Date((row.dataNascita - 25569) * 86400 * 1000);
+        formattedDate = date.toLocaleDateString('it-IT');
+      }
+
       const student = {
-        nome: row.Nome?.trim(),
-        cognome: row.Cognome?.trim(),
-        sesso: row.Sesso?.trim().toUpperCase(),
-        dataNascita: row.DataNascita,
-        classe: row.Classe?.toString(),
-        sezione: row.Sezione?.trim().toUpperCase(),
+        nome: row['Nome']?.toString().trim(),        // Prova con Nome invece di nome
+        cognome: row['Cognome']?.toString().trim(),  // Prova con Cognome invece di cognome
+        sesso: row['Sesso']?.toString().trim().toUpperCase(),
+        dataNascita: formattedDate,
+        classe: row['Classe']?.toString(),
+        sezione: row['Sezione']?.toString().trim().toUpperCase(),
+        school: schoolConfig._id
       };
+
+      // Debug - stampa l'oggetto student
+      console.log(`Student oggetto riga ${rowNumber}:`, student);
 
       // Validazione campi obbligatori
       if (!student.nome) {
+        console.log(`Nome mancante nella riga ${rowNumber}. Valore ricevuto:`, row['Nome']);
         errors.push(`Riga ${rowNumber}: Nome mancante`);
         return;
       }
@@ -94,7 +115,14 @@ const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
           const workbook = XLSX.read(e.target.result, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          const data = XLSX.utils.sheet_to_json(worksheet);
+          const data = XLSX.utils.sheet_to_json(worksheet, {
+            header: 'A',  // usa le lettere come intestazioni temporanee
+            range: 1,     // inizia dalla seconda riga
+            raw: false,   // non convertire i valori
+            defval: ''    // valore di default per celle vuote
+          });
+          console.log('Intestazioni foglio:', Object.keys(worksheet));
+          console.log('Prima riga dati:', data[0]);
 
           const { validData, errors } = validateExcelData(data);
           setValidatedData(validData);
@@ -148,16 +176,9 @@ const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
     }
   };
 
-  const downloadTemplate = () => {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([
-      ['Nome', 'Cognome', 'Sesso', 'DataNascita', 'Classe', 'Sezione'],
-      ['Mario', 'Rossi', 'M', '2010-01-01', '1', 'A']
-    ]);
-
-    XLSX.utils.book_append_sheet(wb, ws, 'Template');
-    XLSX.writeFile(wb, 'template_studenti.xlsx');
-  };
+  const handleDownloadTemplate = () => {
+    downloadTemplate(schoolConfig);
+};
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -174,14 +195,12 @@ const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
         </div>
 
         {/* Template download */}
-        <div className="mb-4">
-          <button
-            onClick={downloadTemplate}
-            className="text-blue-600 hover:text-blue-800 text-sm underline"
-          >
-            Scarica template Excel
-          </button>
-        </div>
+        <button
+        onClick={handleDownloadTemplate}  // invece di downloadTemplate
+        className="text-blue-600 hover:text-blue-800 text-sm underline"
+    >
+        Scarica template Excel
+    </button>
 
         {/* Upload area */}
         <div className="mb-6">
