@@ -125,7 +125,7 @@ const studentController = {
                 message: error.message || 'Errore nel recupero degli studenti' 
             });
         }
-    }
+    },
 
     // GET - Recupera uno studente specifico
     getStudent: async (req, res) => {

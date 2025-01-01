@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Card } from "./ui/card";
-import { Upload, FileX, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+import { Upload, FileX, FileSpreadsheet, AlertTriangle, Download } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import * as XLSX from 'xlsx';
 import ImportPreviewModal from './ImportPreviewModal';
+import axios from 'axios';  // <- Aggiungi questa riga
 
 const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
   const [file, setFile] = useState(null);
@@ -11,6 +12,76 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
   const [currentStep, setCurrentStep] = useState('upload'); // 'upload', 'preview'
   const [validatedData, setValidatedData] = useState(null);
   const [errors, setErrors] = useState([]);
+  const user = JSON.parse(localStorage.getItem('user')); // Otteniamo l'utente autenticato
+
+  const importStudents = async (data) => {
+    try {
+      const response = await axios.post('/api/students/import', data, {
+        headers: {
+          'Content-Type': 'application/json',
+          // Il token viene gestito automaticamente da axios se configurato
+        }
+      });
+      return response.data;
+    } catch (error) {
+      // Gestiamo i diversi tipi di errore
+      if (error.response) {
+        // Il server ha risposto con un errore
+        throw new Error(error.response.data.message || 'Errore durante l\'importazione');
+      } else if (error.request) {
+        // La richiesta è stata fatta ma non c'è stata risposta
+        throw new Error('Nessuna risposta dal server');
+      } else {
+        // Errore nella configurazione della richiesta
+        throw new Error('Errore nella richiesta');
+      }
+    }
+  };
+
+    // Aggiungi handleConfirmImport qui
+    const handleConfirmImport = async () => {
+        if (!validatedData || validatedData.length === 0) {
+        toast.error('Nessun dato da importare');
+        return;
+        }
+
+        setIsLoading(true);
+        
+        try {
+        // Prepariamo i dati per l'invio
+        const importData = {
+            students: validatedData,
+            schoolId: user.school,
+            teacherId: user._id
+        };
+
+        // Chiamiamo la funzione di import
+        const result = await importStudents(importData);
+
+        // Gestione successo
+        toast.success(`Importati con successo ${result.imported} studenti`);
+        
+        // Chiudiamo il modale e resettiamo lo stato
+        handleClose();
+        
+        // Chiamiamo la callback di successo per aggiornare la lista
+        onSuccess?.();
+
+        } catch (error) {
+        // Gestione errori specifica
+        if (error.message.includes('già presenti')) {
+            toast.error('Alcuni studenti sono già presenti nel sistema');
+        } else if (error.message.includes('autorizzazione')) {
+            toast.error('Non hai i permessi per importare studenti');
+        } else {
+            toast.error(`Errore durante l'importazione: ${error.message}`);
+        }
+        } finally {
+        setIsLoading(false);
+        }
+    };
+
+
 
   // Reset dello stato quando il modal viene chiuso
   const handleClose = () => {
@@ -33,8 +104,6 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
       'cognome',
       'classe',
       'sezione',
-      'dataNascita',
-      'codiceFiscale',
       'sesso'
     ];
 
@@ -54,25 +123,16 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
       if (!row.nome?.trim()) rowErrors.push('Nome mancante');
       if (!row.cognome?.trim()) rowErrors.push('Cognome mancante');
 
-      // Validazione classe e sezione
-      if (!row.classe?.trim()) rowErrors.push('Classe mancante');
-      if (!row.sezione?.trim()) rowErrors.push('Sezione mancante');
-
-      // Validazione codice fiscale
-      if (!row.codiceFiscale?.trim()) {
-        rowErrors.push('Codice fiscale mancante');
-      } else if (!/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i.test(row.codiceFiscale)) {
-        rowErrors.push('Formato codice fiscale non valido');
+      // Validazione classe
+      const classNum = parseInt(row.classe);
+      const maxClass = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
+      if (!classNum || classNum < 1 || classNum > maxClass) {
+        rowErrors.push(`Classe non valida (deve essere un numero da 1 a ${maxClass})`);
       }
 
-      // Validazione data di nascita
-      if (!row.dataNascita) {
-        rowErrors.push('Data di nascita mancante');
-      } else {
-        const date = new Date(row.dataNascita);
-        if (isNaN(date.getTime())) {
-          rowErrors.push('Data di nascita non valida');
-        }
+      // Validazione sezione
+      if (!schoolConfig.sezioni_disponibili.includes(row.sezione?.trim().toUpperCase())) {
+        rowErrors.push(`Sezione non valida (deve essere una tra: ${schoolConfig.sezioni_disponibili.join(', ')})`);
       }
 
       // Validazione sesso
@@ -86,15 +146,16 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
         validatedRows.push({
           ...row,
           sesso: row.sesso.toUpperCase(),
-          codiceFiscale: row.codiceFiscale.toUpperCase(),
-          dataNascita: new Date(row.dataNascita)
+          classe: classNum.toString(),
+          sezione: row.sezione.toUpperCase(),
+          teachers: [user._id], // Aggiungiamo l'utente corrente come teacher
+          school: user.school // Aggiungiamo la scuola dell'utente
         });
       }
     });
 
     return { errors, validatedRows };
   };
-
   // Gestione del caricamento del file
   const handleFileUpload = async (event) => {
     const file = event.target.files[0];
@@ -115,8 +176,22 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
       reader.onload = async (e) => {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: 'array' });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { raw: false });
+        
+        // Verifica che esista il foglio "Studenti"
+        if (!workbook.SheetNames.includes('Studenti')) {
+          toast.error('Il file non contiene il foglio "Studenti"');
+          setIsLoading(false);
+          return;
+        }
+
+        const worksheet = workbook.Sheets['Studenti'];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { raw: false });
+
+        if (jsonData.length === 0) {
+          toast.error('Il file non contiene dati');
+          setIsLoading(false);
+          return;
+        }
 
         // Validazione dei dati
         const { errors, validatedRows } = validateExcelData(jsonData);
@@ -125,7 +200,7 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
         if (errors.length === 0) {
           setValidatedData(validatedRows);
           setCurrentStep('preview');
-          toast.success('File caricato con successo');
+          toast.success(`File caricato con successo: ${validatedRows.length} studenti trovati`);
         } else {
           toast.error(`Trovati ${errors.length} errori nel file`);
         }
@@ -139,27 +214,6 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
     }
   };
 
-  // Gestione della conferma dell'importazione
-  const handleConfirmImport = async () => {
-    if (!validatedData) return;
-
-    try {
-      setIsLoading(true);
-      
-      // Qui andrà la chiamata API per l'importazione
-      // await importStudents(validatedData);
-      
-      toast.success('Importazione completata con successo');
-      onSuccess?.();
-      handleClose();
-    } catch (error) {
-      console.error('Errore durante l\'importazione:', error);
-      toast.error('Errore durante l\'importazione');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   // Template di esempio
   const downloadTemplate = () => {
     const template = XLSX.utils.book_new();
@@ -168,41 +222,69 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
         nome: 'Mario',
         cognome: 'Rossi',
         classe: '1',
-        sezione: 'A',
-        dataNascita: '2000-01-01',
-        codiceFiscale: 'RSSMRA00A01H501R',
+        sezione: schoolConfig.sezioni_disponibili[0],
         sesso: 'M'
+      },
+      {
+        nome: 'Anna',
+        cognome: 'Verdi',
+        classe: '1',
+        sezione: schoolConfig.sezioni_disponibili[0],
+        sesso: 'F'
       }
     ];
     
     const ws = XLSX.utils.json_to_sheet(data);
-    XLSX.utils.book_append_sheet(template, ws, 'Template');
-    XLSX.writeFile(template, 'template_studenti.xlsx');
+    
+    // Aggiungi intestazione con info
+    XLSX.utils.sheet_add_aoa(ws, [
+      [`Template Import Studenti - ${schoolConfig.nome}`],
+      [`Tipo Istituto: ${schoolConfig.tipo_istituto === 'primo_grado' ? 'Scuola Media' : 'Scuola Superiore'}`],
+      [`Sezioni disponibili: ${schoolConfig.sezioni_disponibili.join(', ')}`],
+      [],  // riga vuota
+    ], { origin: 'A1' });
+
+    XLSX.utils.book_append_sheet(template, ws, 'Studenti');
+    XLSX.writeFile(template, `template_studenti_${schoolConfig.nome}.xlsx`);
   };
+// Render del componente
+if (!isOpen) return null;
 
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overflow-y-auto">
-      <div className="w-full max-w-2xl mx-4">
-        {currentStep === 'upload' ? (
-          <Card className="bg-white p-6">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-900">
+return (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overflow-y-auto p-4 sm:p-6">
+    <div className="w-full max-w-3xl">
+      {currentStep === 'upload' ? (
+        <Card className="bg-white shadow-xl">
+          {/* Header con info utente */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6 rounded-t-lg">
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-bold">
                 Importa Studenti
               </h2>
               <button
                 onClick={handleClose}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-white/80 hover:text-white transition-colors"
+                disabled={isLoading}
               >
                 <FileX className="w-6 h-6" />
               </button>
             </div>
+            <div className="mt-2 text-sm text-white/80">
+              <p>Scuola: {schoolConfig.nome}</p>
+              <p>Docente: {user.nome} {user.cognome}</p>
+            </div>
+          </div>
 
-            {/* Upload Area */}
+          <div className="p-6">
+            {/* Area Upload */}
             <div className="mb-6">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+              <div 
+                className={`
+                  border-2 border-dashed rounded-lg p-8 text-center 
+                  transition-colors duration-200
+                  ${isLoading ? 'bg-gray-50 border-gray-300' : 'border-blue-300 hover:border-blue-400'}
+                `}
+              >
                 <input
                   type="file"
                   accept=".xlsx,.xls"
@@ -213,24 +295,31 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
                 />
                 <label
                   htmlFor="file-upload"
-                  className="cursor-pointer flex flex-col items-center"
+                  className={`
+                    cursor-pointer flex flex-col items-center
+                    ${isLoading ? 'cursor-not-allowed opacity-60' : ''}
+                  `}
                 >
-                  <Upload className="w-12 h-12 text-gray-400 mb-4" />
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4" />
+                  ) : (
+                    <Upload className="w-12 h-12 text-blue-600 mb-4" />
+                  )}
                   <span className="text-sm text-gray-600">
-                    Trascina qui il file Excel o
+                    {isLoading ? 'Elaborazione in corso...' : 'Trascina qui il file Excel o'}
                   </span>
-                  <span className="text-sm font-semibold text-blue-600">
-                    clicca per selezionare
+                  <span className="text-sm font-semibold text-blue-600 mt-1">
+                    {!isLoading && 'clicca per selezionare'}
                   </span>
                 </label>
               </div>
             </div>
 
             {/* File Info */}
-            {file && (
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            {file && !isLoading && (
+              <div className="mb-6 p-4 bg-blue-50 rounded-lg">
                 <div className="flex items-center">
-                  <FileSpreadsheet className="w-6 h-6 text-green-500 mr-2" />
+                  <FileSpreadsheet className="w-6 h-6 text-blue-600 mr-2" />
                   <span className="text-sm text-gray-600">
                     {file.name} ({Math.round(file.size / 1024)} KB)
                   </span>
@@ -238,50 +327,70 @@ const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
               </div>
             )}
 
-            {/* Errors */}
+            {/* Errori */}
             {errors.length > 0 && (
-              <div className="mb-6 p-4 bg-red-50 rounded-lg">
+              <div className="mb-6 p-4 bg-red-50 rounded-lg animate-fadeIn">
                 <div className="flex items-start mb-2">
                   <AlertTriangle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
                   <span className="text-sm font-semibold text-red-700">
                     Errori trovati nel file:
                   </span>
                 </div>
-                <ul className="text-sm text-red-600 ml-7 list-disc">
-                  {errors.slice(0, 5).map((error, index) => (
-                    <li key={index}>{error}</li>
-                  ))}
-                  {errors.length > 5 && (
-                    <li>...e altri {errors.length - 5} errori</li>
-                  )}
-                </ul>
+                <div className="max-h-40 overflow-y-auto">
+                  <ul className="text-sm text-red-600 ml-7 list-disc space-y-1">
+                    {errors.map((error, index) => (
+                      <li key={index}>{error}</li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             )}
+
+            {/* Info Box */}
+            <div className="mb-6 p-4 bg-yellow-50 rounded-lg">
+              <div className="flex items-start">
+                <div className="text-sm text-yellow-800">
+                  <p className="font-semibold mb-1">Informazioni Importanti:</p>
+                  <ul className="list-disc ml-4 space-y-1">
+                    <li>Utilizzare il template fornito per evitare errori</li>
+                    <li>Classi consentite: {schoolConfig.tipo_istituto === 'primo_grado' ? '1-3' : '1-5'}</li>
+                    <li>Sezioni disponibili: {schoolConfig.sezioni_disponibili.join(', ')}</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
 
             {/* Actions */}
             <div className="flex justify-between items-center pt-4 border-t">
               <button
                 onClick={downloadTemplate}
-                className="text-sm text-blue-600 hover:text-blue-700"
+                className="flex items-center px-4 py-2 text-sm font-medium text-blue-600 hover:text-blue-700 transition-colors disabled:opacity-50"
                 disabled={isLoading}
               >
+                <Download className="w-4 h-4 mr-2" />
                 Scarica template
               </button>
+
+              <div className="text-xs text-gray-500">
+                {isLoading ? 'Elaborazione in corso...' : 'Formato supportato: .xlsx, .xls'}
+              </div>
             </div>
-          </Card>
-        ) : (
-          <ImportPreviewModal
-            isOpen={true}
-            onClose={handleClose}
-            onBack={() => setCurrentStep('upload')}
-            onConfirm={handleConfirmImport}
-            validatedData={validatedData}
-            schoolConfig={schoolConfig}
-          />
-        )}
-      </div>
+          </div>
+        </Card>
+      ) : (
+        <ImportPreviewModal
+          isOpen={true}
+          onClose={handleClose}
+          onBack={() => setCurrentStep('upload')}
+          onConfirm={handleConfirmImport}
+          validatedData={validatedData}
+          schoolConfig={schoolConfig}
+          isLoading={isLoading}
+        />
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 export default ImportStudentsModal;

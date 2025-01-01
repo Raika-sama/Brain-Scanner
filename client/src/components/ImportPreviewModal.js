@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Card } from "./ui/card";
 import { Check, AlertTriangle, X, ArrowLeft, FileCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useAuth } from '../contexts/AuthContext'; // Aggiungiamo il context di autenticazione
+
 
 const ImportPreviewModal = ({ 
   isOpen, 
@@ -13,7 +13,7 @@ const ImportPreviewModal = ({
   schoolConfig 
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
-  const { user } = useAuth(); // Otteniamo l'utente autenticato
+  const user = JSON.parse(localStorage.getItem('user')); // Otteniamo l'utente autenticato
 
   // Raggruppamento degli studenti per classe
   const studentsByClass = useMemo(() => {

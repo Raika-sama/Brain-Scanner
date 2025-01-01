@@ -17,16 +17,6 @@ const studentValidations = {
         .notEmpty().withMessage('Il cognome è obbligatorio')
         .isLength({ min: 2 }).withMessage('Il cognome deve essere di almeno 2 caratteri'),
     
-    codiceFiscale: body('codiceFiscale')
-        .optional() // Questo lo rende opzionale
-        .trim()
-        .matches(/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i)
-        .withMessage('Formato codice fiscale non valido'),
-    
-    dataNascita: body('dataNascita')
-        .notEmpty().withMessage('La data di nascita è obbligatoria')
-        .isISO8601().withMessage('Formato data non valido'),
-    
     sesso: body('sesso')
         .trim()
         .notEmpty().withMessage('Il sesso è obbligatorio')
@@ -52,16 +42,6 @@ const batchValidations = [
         .trim()
         .notEmpty().withMessage('Il cognome è obbligatorio')
         .isLength({ min: 2 }).withMessage('Il cognome deve essere di almeno 2 caratteri'),
-    
-    body('students.*.codiceFiscale')
-        .trim()
-        .notEmpty().withMessage('Il codice fiscale è obbligatorio')
-        .matches(/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i)
-        .withMessage('Formato codice fiscale non valido'),
-    
-    body('students.*.dataNascita')
-        .notEmpty().withMessage('La data di nascita è obbligatoria')
-        .isISO8601().withMessage('Formato data non valido'),
     
     body('students.*.sesso')
         .trim()
@@ -114,13 +94,23 @@ router.post('/',
     [
         studentValidations.nome,
         studentValidations.cognome,
-        studentValidations.codiceFiscale,
-        studentValidations.dataNascita,
         studentValidations.sesso,
         studentValidations.classe
     ],
     validateRequest,
     studentController.createStudent
+);
+
+// Route per l'importazione studenti
+router.post('/import',
+    authMiddleware,
+    [
+        body('students').isArray().withMessage('È richiesto un array di studenti'),
+        body('schoolId').isMongoId().withMessage('ID scuola non valido'),
+        body('teacherId').isMongoId().withMessage('ID insegnante non valido')
+    ],
+    validateRequest,
+    studentController.importStudents
 );
 
 router.post('/batch',
@@ -137,8 +127,6 @@ router.put('/:id',
         param('id').isMongoId().withMessage('ID studente non valido'),
         studentValidations.nome,
         studentValidations.cognome,
-        studentValidations.codiceFiscale,
-        studentValidations.dataNascita,
         studentValidations.sesso,
         studentValidations.classe
     ],
