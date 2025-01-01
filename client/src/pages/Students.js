@@ -237,7 +237,7 @@ const Students = () => {
                 <tr key={student._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">{student.nome}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{student.cognome}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">{student.classe}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">{student.classe?.nome || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{student.sezione}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex justify-center gap-2">

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Card } from "./ui/card";
 import { Check, AlertTriangle, X, ArrowLeft, FileCheck } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useAuth } from '../contexts/AuthContext'; // Aggiungiamo il context di autenticazione
 
 const ImportPreviewModal = ({ 
   isOpen, 
@@ -12,6 +13,7 @@ const ImportPreviewModal = ({
   schoolConfig 
 }) => {
   const [isProcessing, setIsProcessing] = useState(false);
+  const { user } = useAuth(); // Otteniamo l'utente autenticato
 
   // Raggruppamento degli studenti per classe
   const studentsByClass = useMemo(() => {
@@ -37,19 +39,31 @@ const ImportPreviewModal = ({
       studentsByGender: validatedData.reduce((acc, student) => {
         acc[student.sesso] = (acc[student.sesso] || 0) + 1;
         return acc;
-      }, {})
+      }, {}),
+      newClasses: Object.keys(studentsByClass).length, // Mostreremo questo nel preview
     };
   }, [validatedData, studentsByClass]);
 
   const handleConfirm = async () => {
     setIsProcessing(true);
     try {
-      await onConfirm();
+      // Aggiungiamo le informazioni dell'utente e della scuola
+      const dataToSubmit = {
+        students: validatedData.map(student => ({
+          ...student,
+          teachers: [user._id], // Aggiungiamo l'utente corrente come teacher
+          school: user.school // Aggiungiamo la scuola dell'utente
+        })),
+        schoolId: user.school,
+        teacherId: user._id
+      };
+
+      await onConfirm(dataToSubmit);
       toast.success('Importazione completata con successo');
       onClose();
     } catch (error) {
-      toast.error('Errore durante l\'importazione');
-      console.error('Errore importazione:', error);
+      console.error('Errore durante l\'importazione:', error);
+      toast.error(error.response?.data?.message || 'Errore durante l\'importazione');
     } finally {
       setIsProcessing(false);
     }
@@ -73,6 +87,14 @@ const ImportPreviewModal = ({
             >
               <X className="w-6 h-6" />
             </button>
+          </div>
+
+          {/* Info utente e scuola */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+            <div className="text-sm text-blue-600">
+              <p>Importazione come: {user.nome} {user.cognome}</p>
+              <p>Scuola: {schoolConfig.nome}</p>
+            </div>
           </div>
 
           {/* Statistiche */}

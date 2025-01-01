@@ -1,73 +1,43 @@
-import ExcelJS from 'exceljs';  // oppure const ExcelJS = require('exceljs');
+import ExcelJS from 'exceljs';
 
-// Helper functions
-const isValidDate = (dateString) => {
-  if (!dateString || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
-    return false;
-  }
-
-  const [day, month, year] = dateString.split('/').map(Number);
-  const date = new Date(year, month - 1, day);
-
-  return date.getDate() === day &&
-         date.getMonth() === month - 1 &&
-         date.getFullYear() === year &&
-         date.getFullYear() >= 1900 &&
-         date.getFullYear() <= new Date().getFullYear();
-};
-
-const normalizeStudentData = (row) => {
-  return {
-    nome: (row.Nome || '').trim(),
-    cognome: (row.Cognome || '').trim(),
-    sesso: (row.Sesso || '').toString().toUpperCase().trim(),
-    data_nascita: (row['Data di Nascita'] || '').trim(),
-    classe: parseInt(row.Classe || '0'),
-    sezione: (row.Sezione || '').toString().toUpperCase().trim(),
-    indirizzo: (row.Indirizzo || '').trim()
-  };
-};
-
-const validateRow = (row, schoolConfig, rowIndex) => {
+const validateStudentData = (row, schoolConfig, rowIndex) => {
   const errors = [];
-  const { tipo_istituto, sezioni_disponibili } = schoolConfig;
-
-  // Verifica se la riga è vuota
-  const isEmptyRow = !row || Object.values(row).every(value => 
-    !value || value.toString().trim() === ''
-  );
   
-  if (isEmptyRow) {
-    return [];
+  // Funzioni helper per validazione
+  const isValidName = (name) => name && name.toString().trim().length >= 2;
+  const isValidGender = (gender) => gender && ['M', 'F'].includes(gender.toString().toUpperCase());
+  const isValidClass = (classNum) => {
+    const num = parseInt(classNum);
+    const maxClass = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
+    return !isNaN(num) && num >= 1 && num <= maxClass;
+  };
+  const isValidSection = (section) => 
+    section && schoolConfig.sezioni_disponibili.includes(section.toString().toUpperCase());
+
+  // Validazione Nome
+  if (!isValidName(row.Nome)) {
+    errors.push(`Riga ${rowIndex}: Nome mancante o non valido (minimo 2 caratteri)`);
   }
 
-  const maxClasse = tipo_istituto === 'primo_grado' ? 3 : 5;
-
-  if (!row.Nome || row.Nome.toString().trim() === '') {
-    errors.push(`Riga ${rowIndex}: Nome mancante o non valido`);
+  // Validazione Cognome
+  if (!isValidName(row.Cognome)) {
+    errors.push(`Riga ${rowIndex}: Cognome mancante o non valido (minimo 2 caratteri)`);
   }
 
-  if (!row.Cognome || row.Cognome.toString().trim() === '') {
-    errors.push(`Riga ${rowIndex}: Cognome mancante o non valido`);
-  }
-
-  const sesso = row.Sesso ? row.Sesso.toString().toUpperCase().trim() : '';
-  if (!sesso || !['M', 'F'].includes(sesso)) {
+  // Validazione Sesso
+  if (!isValidGender(row.Sesso)) {
     errors.push(`Riga ${rowIndex}: Sesso non valido (deve essere M o F)`);
   }
 
-  if (!row['Data di Nascita'] || !isValidDate(row['Data di Nascita'].toString())) {
-    errors.push(`Riga ${rowIndex}: Data di nascita non valida (formato: GG/MM/AAAA)`);
+  // Validazione Classe
+  if (!isValidClass(row.Classe)) {
+    const maxClass = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
+    errors.push(`Riga ${rowIndex}: Classe non valida (deve essere un numero da 1 a ${maxClass})`);
   }
 
-  const classe = parseInt(row.Classe || '0');
-  if (isNaN(classe) || classe < 1 || classe > maxClasse) {
-    errors.push(`Riga ${rowIndex}: Classe non valida (deve essere tra 1 e ${maxClasse})`);
-  }
-
-  const sezione = row.Sezione ? row.Sezione.toString().toUpperCase().trim() : '';
-  if (!sezione || !sezioni_disponibili.includes(sezione)) {
-    errors.push(`Riga ${rowIndex}: Sezione non valida (deve essere una tra: ${sezioni_disponibili.join(', ')})`);
+  // Validazione Sezione
+  if (!isValidSection(row.Sezione)) {
+    errors.push(`Riga ${rowIndex}: Sezione non valida (deve essere una tra: ${schoolConfig.sezioni_disponibili.join(', ')})`);
   }
 
   return errors;
@@ -87,32 +57,29 @@ export const validateExcelFile = async (file, schoolConfig) => {
           throw new Error('Il file non contiene il foglio "Studenti"');
         }
 
-        console.log("Numero di righe nel foglio:", worksheet.rowCount);
-        
         const errors = [];
         const validData = [];
+        const studentsByClass = {};
 
-        // Inizia dalla riga 2 (dopo l'intestazione)
+        // Verifica intestazioni
+        const requiredHeaders = ['Nome', 'Cognome', 'Sesso', 'Classe', 'Sezione'];
+        const headers = worksheet.getRow(1).values.slice(1); // Ignora la prima cella vuota
+        const missingHeaders = requiredHeaders.filter(header => !headers.includes(header));
+        
+        if (missingHeaders.length > 0) {
+          throw new Error(`Colonne mancanti: ${missingHeaders.join(', ')}`);
+        }
+
+        // Processa le righe
         for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
           const row = worksheet.getRow(rowNumber);
-          
-          // Log per debug
-          console.log(`\nProcessing Row ${rowNumber}:`);
-          console.log('Nome:', row.getCell(1).value);
-          console.log('Cognome:', row.getCell(2).value);
-          console.log('Sesso:', row.getCell(3).value);
-          console.log('Data di Nascita:', row.getCell(4).value);
-          console.log('Classe:', row.getCell(5).value);
-          console.log('Sezione:', row.getCell(6).value);
-
           const rowData = {
-            Nome: row.getCell(1).value || '',
-            Cognome: row.getCell(2).value || '',
-            Sesso: row.getCell(3).value || '',
-            'Data di Nascita': row.getCell(4).value || '',
-            Classe: row.getCell(5).value || '',
-            Sezione: row.getCell(6).value || '',
-            Indirizzo: row.getCell(7).value || ''
+            Nome: row.getCell(1).value,
+            Cognome: row.getCell(2).value,
+            Sesso: row.getCell(3).value,
+            Classe: row.getCell(4).value,
+            Sezione: row.getCell(5).value,
+            Note: row.getCell(6).value || ''
           };
 
           // Verifica se la riga è vuota
@@ -121,9 +88,25 @@ export const validateExcelFile = async (file, schoolConfig) => {
           );
 
           if (hasData) {
-            const rowErrors = validateRow(rowData, schoolConfig, rowNumber);
+            const rowErrors = validateStudentData(rowData, schoolConfig, rowNumber);
+            
             if (rowErrors.length === 0) {
-              validData.push(normalizeStudentData(rowData));
+              const normalizedData = {
+                nome: rowData.Nome.toString().trim(),
+                cognome: rowData.Cognome.toString().trim(),
+                sesso: rowData.Sesso.toString().toUpperCase(),
+                classe: rowData.Classe.toString(),
+                sezione: rowData.Sezione.toString().toUpperCase(),
+                note: rowData.Note?.toString().trim() || ''
+              };
+
+              // Raggruppa per classe
+              const classKey = `${normalizedData.classe}${normalizedData.sezione}`;
+              if (!studentsByClass[classKey]) {
+                studentsByClass[classKey] = [];
+              }
+              studentsByClass[classKey].push(normalizedData);
+              validData.push(normalizedData);
             } else {
               errors.push(...rowErrors);
             }
@@ -133,12 +116,12 @@ export const validateExcelFile = async (file, schoolConfig) => {
         resolve({
           errors,
           validData,
+          studentsByClass,
           totalRows: worksheet.rowCount - 1,
           validRows: validData.length
         });
 
       } catch (error) {
-        console.error('Error details:', error);
         reject(new Error(`Errore durante la lettura del file: ${error.message}`));
       }
     };

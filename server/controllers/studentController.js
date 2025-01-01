@@ -1,23 +1,131 @@
 const Student = require('../models/Student');
 const School = require('../models/Schools');
+const ClassService = require('../services/classService');
 const Class = require('../models/Class');
 const mongoose = require('mongoose');
 
 const studentController = {
+    
+    // Import studenti da excel
+    importStudents: async (req, res) => {
+        const session = await startSession();
+        session.startTransaction();
+
+        try {
+            const { students, schoolId, teacherId } = req.body;
+            
+            // Verifica la scuola
+            const school = await School.findById(schoolId);
+            if (!school) {
+                throw new Error('Scuola non trovata');
+            }
+
+            const currentSchoolYear = ClassService.getCurrentSchoolYear();
+            const importedStudents = [];
+
+            // Raggruppa studenti per classe
+            const studentsByClass = students.reduce((acc, student) => {
+                const key = `${student.classe}-${student.sezione}`;
+                if (!acc[key]) acc[key] = [];
+                acc[key].push(student);
+                return acc;
+            }, {});
+
+            // Processa ogni classe
+            for (const [classKey, classStudents] of Object.entries(studentsByClass)) {
+                const [classNumber, section] = classKey.split('-');
+
+                // Valida la classe rispetto al tipo di scuola
+                if (!ClassService.validateClassNumber(classNumber, school.tipo_istituto)) {
+                    throw new Error(`Classe ${classNumber} non valida per questo tipo di scuola`);
+                }
+
+                // Verifica che la sezione sia tra quelle disponibili
+                if (!school.sezioni_disponibili.includes(section)) {
+                    throw new Error(`Sezione ${section} non disponibile`);
+                }
+
+                // Trova o crea la classe
+                const classObj = await ClassService.findOrCreateClass({
+                    nome: classNumber,
+                    sezione: section,
+                    annoScolastico: currentSchoolYear,
+                    scuola: schoolId
+                }, session);
+
+                // Crea gli studenti
+                for (const studentData of classStudents) {
+                    const newStudent = new Student({
+                        nome: studentData.nome,
+                        cognome: studentData.cognome,
+                        sesso: studentData.sesso.toUpperCase(),
+                        classe: classObj._id,
+                        school: schoolId,
+                        teachers: [teacherId],
+                        note: studentData.note || ''
+                    });
+
+                    await newStudent.save({ session });
+                    classObj.studenti.push(newStudent._id);
+                    importedStudents.push(newStudent);
+                }
+
+                // Aggiorna la classe con i nuovi studenti
+                await classObj.save({ session });
+            }
+
+            await session.commitTransaction();
+            
+            res.json({
+                success: true,
+                message: 'Importazione completata con successo',
+                data: {
+                    totalImported: importedStudents.length,
+                    students: importedStudents
+                }
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore durante l\'importazione'
+            });
+        } finally {
+            session.endSession();
+        }
+    },
+    
     // GET - Recupera tutti gli studenti
     getStudents: async (req, res) => {
         try {
             const students = await Student.find({ scuola: req.user.scuola })
-                .populate('classe', 'nome sezione annoScolastico')
+                .populate('classe', 'nome sezione annoScolastico') // Popola i dati della classe
                 .sort({ cognome: 1, nome: 1 });
-            res.json({ success: true, data: students });
+    
+            // Mappiamo i dati per assicurarci che classe e sezione siano stringhe
+            const formattedStudents = students.map(student => ({
+                _id: student._id,
+                nome: student.nome,
+                cognome: student.cognome,
+                classe: student.classe?.nome || '', // Usa il nome della classe popolata
+                sezione: student.classe?.sezione || '',
+                sesso: student.sesso,
+                dataNascita: student.dataNascita,
+                note: student.note
+            }));
+    
+            res.json({ 
+                success: true, 
+                data: formattedStudents 
+            });
         } catch (error) {
             res.status(500).json({ 
                 success: false, 
                 message: error.message || 'Errore nel recupero degli studenti' 
             });
         }
-    },
+    }
 
     // GET - Recupera uno studente specifico
     getStudent: async (req, res) => {
