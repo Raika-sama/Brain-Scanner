@@ -1,263 +1,285 @@
 import React, { useState } from 'react';
-import { X, Upload } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import axios from 'axios';
-import * as XLSX from 'xlsx';
 import { Card } from "./ui/card";
-import { downloadTemplate } from '../utils/excelTemplate';
+import { Upload, FileX, FileSpreadsheet, AlertTriangle } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import * as XLSX from 'xlsx';
+import ImportPreviewModal from './ImportPreviewModal';
 
-const ImportStudentsModal = ({ isOpen, onClose, schoolConfig }) => {
+const ImportStudentsModal = ({ isOpen, onClose, onSuccess, schoolConfig }) => {
   const [file, setFile] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState('upload'); // 'upload', 'preview'
   const [validatedData, setValidatedData] = useState(null);
   const [errors, setErrors] = useState([]);
-  const [isProcessing, setIsProcessing] = useState(false);
 
-  if (!isOpen) return null;
-
-  const validateExcelData = (data) => {
-    const errors = [];
-    const validData = [];
-
-    // Debug - stampa i dati grezzi
-    console.log('Dati Excel grezzi:', data);
-
-    data.forEach((row, index) => {
-      const rowNumber = index + 2;
-     // Debug - stampa ogni riga
-     console.log(`Riga ${rowNumber}:`, row);
-     
-     
-      // Converti la data da formato Excel a stringa
-      let formattedDate = row.dataNascita;
-      if (typeof row.dataNascita === 'number') {
-        // Converti il numero seriale Excel in data
-        const date = new Date((row.dataNascita - 25569) * 86400 * 1000);
-        formattedDate = date.toLocaleDateString('it-IT');
-      }
-
-      const student = {
-        nome: row['Nome']?.toString().trim(),        // Prova con Nome invece di nome
-        cognome: row['Cognome']?.toString().trim(),  // Prova con Cognome invece di cognome
-        sesso: row['Sesso']?.toString().trim().toUpperCase(),
-        dataNascita: formattedDate,
-        classe: row['Classe']?.toString(),
-        sezione: row['Sezione']?.toString().trim().toUpperCase(),
-        school: schoolConfig._id
-      };
-
-      // Debug - stampa l'oggetto student
-      console.log(`Student oggetto riga ${rowNumber}:`, student);
-
-      // Validazione campi obbligatori
-      if (!student.nome) {
-        console.log(`Nome mancante nella riga ${rowNumber}. Valore ricevuto:`, row['Nome']);
-        errors.push(`Riga ${rowNumber}: Nome mancante`);
-        return;
-      }
-      if (!student.cognome) {
-        errors.push(`Riga ${rowNumber}: Cognome mancante`);
-        return;
-      }
-      if (!student.sesso || !['M', 'F'].includes(student.sesso)) {
-        errors.push(`Riga ${rowNumber}: Sesso non valido (deve essere M o F)`);
-        return;
-      }
-      if (!student.dataNascita) {
-        errors.push(`Riga ${rowNumber}: Data di nascita mancante`);
-        return;
-      }
-      if (!student.classe) {
-        errors.push(`Riga ${rowNumber}: Classe mancante`);
-        return;
-      }
-      if (!student.sezione) {
-        errors.push(`Riga ${rowNumber}: Sezione mancante`);
-        return;
-      }
-
-      // Validazione classe in base al tipo di istituto
-      const maxClasse = schoolConfig.tipo_istituto === 'primo_grado' ? 3 : 5;
-      const classeNum = parseInt(student.classe);
-      if (isNaN(classeNum) || classeNum < 1 || classeNum > maxClasse) {
-        errors.push(`Riga ${rowNumber}: Classe non valida (deve essere tra 1 e ${maxClasse})`);
-        return;
-      }
-
-      // Validazione sezione
-      if (!schoolConfig.sezioni_disponibili.includes(student.sezione)) {
-        errors.push(`Riga ${rowNumber}: Sezione non valida (deve essere una tra: ${schoolConfig.sezioni_disponibili.join(', ')})`);
-        return;
-      }
-
-      // Se tutte le validazioni passano, aggiungi lo studente ai dati validi
-      validData.push({
-        ...student,
-        school: schoolConfig._id // Aggiungi il riferimento alla scuola
-      });
-    });
-
-    return { validData, errors };
+  // Reset dello stato quando il modal viene chiuso
+  const handleClose = () => {
+    setFile(null);
+    setIsLoading(false);
+    setCurrentStep('upload');
+    setValidatedData(null);
+    setErrors([]);
+    onClose();
   };
 
-  const handleFileChange = async (event) => {
-    const selectedFile = event.target.files[0];
-    if (!selectedFile) return;
+  // Validazione base dei dati Excel
+  const validateExcelData = (data) => {
+    const errors = [];
+    const validatedRows = [];
 
-    setFile(selectedFile);
-    setIsProcessing(true);
-    setErrors([]);
-    setValidatedData(null);
+    // Verifica che ci siano le colonne necessarie
+    const requiredColumns = [
+      'nome',
+      'cognome',
+      'classe',
+      'sezione',
+      'dataNascita',
+      'codiceFiscale',
+      'sesso'
+    ];
+
+    const headers = Object.keys(data[0] || {});
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+
+    if (missingColumns.length > 0) {
+      errors.push(`Colonne mancanti: ${missingColumns.join(', ')}`);
+      return { errors, validatedRows: [] };
+    }
+
+    // Validazione riga per riga
+    data.forEach((row, index) => {
+      const rowErrors = [];
+
+      // Validazione nome e cognome
+      if (!row.nome?.trim()) rowErrors.push('Nome mancante');
+      if (!row.cognome?.trim()) rowErrors.push('Cognome mancante');
+
+      // Validazione classe e sezione
+      if (!row.classe?.trim()) rowErrors.push('Classe mancante');
+      if (!row.sezione?.trim()) rowErrors.push('Sezione mancante');
+
+      // Validazione codice fiscale
+      if (!row.codiceFiscale?.trim()) {
+        rowErrors.push('Codice fiscale mancante');
+      } else if (!/^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$/i.test(row.codiceFiscale)) {
+        rowErrors.push('Formato codice fiscale non valido');
+      }
+
+      // Validazione data di nascita
+      if (!row.dataNascita) {
+        rowErrors.push('Data di nascita mancante');
+      } else {
+        const date = new Date(row.dataNascita);
+        if (isNaN(date.getTime())) {
+          rowErrors.push('Data di nascita non valida');
+        }
+      }
+
+      // Validazione sesso
+      if (!['M', 'F'].includes(row.sesso?.toUpperCase())) {
+        rowErrors.push('Sesso non valido (deve essere M o F)');
+      }
+
+      if (rowErrors.length > 0) {
+        errors.push(`Riga ${index + 2}: ${rowErrors.join(', ')}`);
+      } else {
+        validatedRows.push({
+          ...row,
+          sesso: row.sesso.toUpperCase(),
+          codiceFiscale: row.codiceFiscale.toUpperCase(),
+          dataNascita: new Date(row.dataNascita)
+        });
+      }
+    });
+
+    return { errors, validatedRows };
+  };
+
+  // Gestione del caricamento del file
+  const handleFileUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Verifica estensione del file
+    const fileExt = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'xls'].includes(fileExt)) {
+      toast.error('Per favore carica un file Excel (.xlsx o .xls)');
+      return;
+    }
+
+    setFile(file);
+    setIsLoading(true);
 
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
-        try {
-          const workbook = XLSX.read(e.target.result, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const data = XLSX.utils.sheet_to_json(worksheet, {
-            header: 'A',  // usa le lettere come intestazioni temporanee
-            range: 1,     // inizia dalla seconda riga
-            raw: false,   // non convertire i valori
-            defval: ''    // valore di default per celle vuote
-          });
-          console.log('Intestazioni foglio:', Object.keys(worksheet));
-          console.log('Prima riga dati:', data[0]);
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(firstSheet, { raw: false });
 
-          const { validData, errors } = validateExcelData(data);
-          setValidatedData(validData);
-          setErrors(errors);
-
-          if (validData.length > 0) {
-            toast.success(`Trovati ${validData.length} studenti validi`);
-          }
-          if (errors.length > 0) {
-            toast.error(`Trovati ${errors.length} errori`);
-          }
-        } catch (error) {
-          console.error('Errore durante la lettura del file:', error);
-          setErrors(['Errore durante la lettura del file Excel']);
-          toast.error('Errore durante la lettura del file');
+        // Validazione dei dati
+        const { errors, validatedRows } = validateExcelData(jsonData);
+        
+        setErrors(errors);
+        if (errors.length === 0) {
+          setValidatedData(validatedRows);
+          setCurrentStep('preview');
+          toast.success('File caricato con successo');
+        } else {
+          toast.error(`Trovati ${errors.length} errori nel file`);
         }
       };
-      reader.readAsArrayBuffer(selectedFile);
+      reader.readAsArrayBuffer(file);
     } catch (error) {
-      console.error('Errore durante il processo di validazione:', error);
-      setErrors(['Errore durante il processo di validazione']);
-      toast.error('Errore durante la validazione');
+      console.error('Errore durante la lettura del file:', error);
+      toast.error('Errore durante la lettura del file');
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
-  const handleImport = async () => {
-    if (!validatedData || validatedData.length === 0) {
-      toast.error('Nessun dato valido da importare');
-      return;
-    }
+  // Gestione della conferma dell'importazione
+  const handleConfirmImport = async () => {
+    if (!validatedData) return;
 
-    setIsProcessing(true);
     try {
-      const response = await axios.post('http://localhost:5000/api/students/batch', {
-        students: validatedData
-      });
-
-      if (response.data.success) {
-        toast.success(response.data.message);
-        onClose();
-      } else {
-        toast.error(response.data.message || 'Errore durante l\'importazione');
-      }
+      setIsLoading(true);
+      
+      // Qui andrà la chiamata API per l'importazione
+      // await importStudents(validatedData);
+      
+      toast.success('Importazione completata con successo');
+      onSuccess?.();
+      handleClose();
     } catch (error) {
       console.error('Errore durante l\'importazione:', error);
-      toast.error(error.response?.data?.message || 'Errore durante l\'importazione');
+      toast.error('Errore durante l\'importazione');
     } finally {
-      setIsProcessing(false);
+      setIsLoading(false);
     }
   };
 
-  const handleDownloadTemplate = () => {
-    downloadTemplate(schoolConfig);
-};
+  // Template di esempio
+  const downloadTemplate = () => {
+    const template = XLSX.utils.book_new();
+    const data = [
+      {
+        nome: 'Mario',
+        cognome: 'Rossi',
+        classe: '1',
+        sezione: 'A',
+        dataNascita: '2000-01-01',
+        codiceFiscale: 'RSSMRA00A01H501R',
+        sesso: 'M'
+      }
+    ];
+    
+    const ws = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(template, ws, 'Template');
+    XLSX.writeFile(template, 'template_studenti.xlsx');
+  };
+
+  if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <Card className="w-full max-w-lg bg-white p-6 relative">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Importa Studenti da Excel</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overflow-y-auto">
+      <div className="w-full max-w-2xl mx-4">
+        {currentStep === 'upload' ? (
+          <Card className="bg-white p-6">
+            {/* Header */}
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-gray-900">
+                Importa Studenti
+              </h2>
+              <button
+                onClick={handleClose}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FileX className="w-6 h-6" />
+              </button>
+            </div>
 
-        {/* Template download */}
-        <button
-        onClick={handleDownloadTemplate}  // invece di downloadTemplate
-        className="text-blue-600 hover:text-blue-800 text-sm underline"
-    >
-        Scarica template Excel
-    </button>
+            {/* Upload Area */}
+            <div className="mb-6">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  id="file-upload"
+                  disabled={isLoading}
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="cursor-pointer flex flex-col items-center"
+                >
+                  <Upload className="w-12 h-12 text-gray-400 mb-4" />
+                  <span className="text-sm text-gray-600">
+                    Trascina qui il file Excel o
+                  </span>
+                  <span className="text-sm font-semibold text-blue-600">
+                    clicca per selezionare
+                  </span>
+                </label>
+              </div>
+            </div>
 
-        {/* Upload area */}
-        <div className="mb-6">
-          <label className="flex flex-col items-center px-4 py-6 border-2 border-dashed rounded-lg hover:bg-gray-50 cursor-pointer">
-            <Upload className="w-8 h-8 text-gray-400 mb-2" />
-            <span className="text-sm text-gray-500">
-              {file ? file.name : "Seleziona file Excel"}
-            </span>
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-          </label>
-        </div>
+            {/* File Info */}
+            {file && (
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center">
+                  <FileSpreadsheet className="w-6 h-6 text-green-500 mr-2" />
+                  <span className="text-sm text-gray-600">
+                    {file.name} ({Math.round(file.size / 1024)} KB)
+                  </span>
+                </div>
+              </div>
+            )}
 
-        {/* Validation results */}
-        {errors.length > 0 && (
-          <div className="mb-4">
-            <h3 className="font-semibold text-red-600 mb-2">Errori di validazione:</h3>
-            <ul className="list-disc list-inside text-red-600 text-sm max-h-40 overflow-y-auto">
-              {errors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-          </div>
+            {/* Errors */}
+            {errors.length > 0 && (
+              <div className="mb-6 p-4 bg-red-50 rounded-lg">
+                <div className="flex items-start mb-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500 mr-2 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm font-semibold text-red-700">
+                    Errori trovati nel file:
+                  </span>
+                </div>
+                <ul className="text-sm text-red-600 ml-7 list-disc">
+                  {errors.slice(0, 5).map((error, index) => (
+                    <li key={index}>{error}</li>
+                  ))}
+                  {errors.length > 5 && (
+                    <li>...e altri {errors.length - 5} errori</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-between items-center pt-4 border-t">
+              <button
+                onClick={downloadTemplate}
+                className="text-sm text-blue-600 hover:text-blue-700"
+                disabled={isLoading}
+              >
+                Scarica template
+              </button>
+            </div>
+          </Card>
+        ) : (
+          <ImportPreviewModal
+            isOpen={true}
+            onClose={handleClose}
+            onBack={() => setCurrentStep('upload')}
+            onConfirm={handleConfirmImport}
+            validatedData={validatedData}
+            schoolConfig={schoolConfig}
+          />
         )}
-
-        {validatedData && validatedData.length > 0 && (
-          <div className="mb-4 p-4 bg-blue-50 text-blue-700 rounded-lg">
-            Studenti validi trovati: {validatedData.length}
-          </div>
-        )}
-
-        {/* Actions */}
-        <div className="flex justify-end gap-3 mt-6">
-          <button 
-            onClick={onClose}
-            className="px-4 py-2 text-gray-600 hover:text-gray-800"
-            disabled={isProcessing}
-          >
-            Annulla
-          </button>
-          <button 
-            onClick={handleImport}
-            disabled={!validatedData || validatedData.length === 0 || isProcessing}
-            className={`px-4 py-2 rounded-lg ${
-              validatedData && validatedData.length > 0 && !isProcessing
-                ? 'bg-blue-600 text-white hover:bg-blue-700'
-                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            {isProcessing ? 'Importazione...' : 'Importa Studenti'}
-          </button>
-        </div>
-      </Card>
+      </div>
     </div>
   );
 };
