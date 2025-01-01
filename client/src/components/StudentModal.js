@@ -8,7 +8,7 @@ import axios from '../utils/axios'; // Importa l'istanza axios configurata
 const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   // Stati base
   const [formData, setFormData] = useState({
-    nome: '',
+    name: '',
     cognome: '',
     sesso: '',
     classe: '',

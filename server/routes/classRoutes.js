@@ -7,10 +7,10 @@ const { validateRequest } = require('../middleware/validateRequest');
 
 // Validazioni per la classe
 const classValidations = [
-    body('numero')
+    body('number')
         .notEmpty().withMessage('Il numero della classe è obbligatorio')
-        .matches(/^[1-5]$/).withMessage('Il numero della classe deve essere tra 1 e 5'),
-    body('sezione')
+        .isInt({ min: 1, max: 5 }).withMessage('Il numero della classe deve essere tra 1 e 5'),
+    body('section')
         .notEmpty().withMessage('La sezione è obbligatoria')
         .matches(/^[A-Z]$/).withMessage('La sezione deve essere una lettera maiuscola')
 ];

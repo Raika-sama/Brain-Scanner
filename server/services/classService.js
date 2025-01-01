@@ -4,24 +4,24 @@ const { startSession } = require('mongoose');
 class ClassService {
     // Trova o crea una classe
     static async findOrCreateClass(classData, session) {
-        const { numero, sezione, annoScolastico, school } = classData;
+        const { number, section, schoolYear, schoolId } = classData;  // Cambiati i nomi dei campi
 
         try {
             // Cerca una classe esistente
             let existingClass = await Class.findOne({
-                numero,
-                sezione,
-                annoScolastico,
-                school
+                number,
+                section,
+                schoolYear,
+                schoolId
             }).session(session);
 
             // Se non esiste, creala
             if (!existingClass) {
                 existingClass = new Class({
-                    numero,
-                    sezione,
-                    annoScolastico,
-                    school,
+                    number,
+                    section,
+                    schoolYear,
+                    schoolId,
                     students: []
                 });
                 await existingClass.save({ session });
@@ -34,33 +34,33 @@ class ClassService {
         }
     }
 
-    // Calcola l'anno scolastico corrente
+    // Calcola l'anno scolastico corrente (questo metodo è già corretto)
     static getCurrentSchoolYear() {
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
         
         const schoolYear = month >= 9 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
-        console.log('Anno scolastico calcolato:', schoolYear); // Aggiungi questo log
+        console.log('Anno scolastico calcolato:', schoolYear);
         return schoolYear;
     }
 
     // Valida la classe rispetto al tipo di scuola
-    static validateClassNumber(numero, schoolType) {
-        const num = parseInt(numero);
+    static validateClassNumber(number, schoolType) {  // Cambiato da numero a number
+        const num = parseInt(number);
         if (isNaN(num)) return false;
 
         switch (schoolType) {
-            case 'primo_grado':
+            case 'middle_school':  // Cambiato da primo_grado a middle_school
                 return num >= 1 && num <= 3;
-            case 'secondo_grado':
+            case 'high_school':    // Cambiato da secondo_grado a high_school
                 return num >= 1 && num <= 5;
             default:
                 return false;
         }
     }
 
-    // Nuovo metodo per aggiornare gli studenti di una classe
+    // Aggiorna gli studenti di una classe
     static async updateClassStudents(classId, studentId, action = 'add', session) {
         try {
             const updateOperation = action === 'add' 
@@ -84,16 +84,16 @@ class ClassService {
         }
     }
 
-    // Nuovo metodo per verificare duplicati in una classe
-    static async checkDuplicateStudent(nome, cognome, classId, school) {
+    // Verifica duplicati in una classe
+    static async checkDuplicateStudent(firstName, lastName, classId, schoolId) {  // Cambiati i nomi dei parametri
         try {
             const existingStudent = await Class.findOne({
                 _id: classId,
-                school,
+                schoolId,
                 students: {
                     $elemMatch: {
-                        nome: new RegExp(`^${nome}$`, 'i'),
-                        cognome: new RegExp(`^${cognome}$`, 'i')
+                        firstName: new RegExp(`^${firstName}$`, 'i'),  // Cambiato da nome a firstName
+                        lastName: new RegExp(`^${lastName}$`, 'i')     // Cambiato da cognome a lastName
                     }
                 }
             });

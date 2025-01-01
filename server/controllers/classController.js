@@ -6,12 +6,12 @@ const classController = {
     // GET - Ottieni tutte le classi
     getClasses: async (req, res) => {
         try {
-            const query = { schoolId: req.user.scuola };
+            const query = { schoolId: req.user.schoolId };  // Cambiato da scuola a schoolId
             
             const classes = await Class.find(query)
-                .populate('schoolId', 'nome tipo_istituto')
-                .populate('students', 'nome cognome')
-                .sort({ name: 1, section: 1 });
+                .populate('schoolId', 'name type')  // Aggiornati i campi del populate
+                .populate('students', 'firstName lastName')  // Aggiornati i campi del populate
+                .sort({ number: 1, section: 1 });  // Cambiato da name a number
     
             res.json({
                 success: true,
@@ -23,7 +23,6 @@ const classController = {
                 success: false,
                 message: error.message || 'Errore nel recupero delle classi'
             });
-            }
         }
     },
 
@@ -32,11 +31,11 @@ const classController = {
         try {
             const classe = await Class.findOne({
                 _id: req.params.id,
-                school: req.user.scuola  // Aggiunto controllo della scuola
+                schoolId: req.user.schoolId  // Cambiato da school a schoolId
             })
-                .populate('school', 'nome tipo_istituto')
-                .populate('students', 'nome cognome')
-                .populate('teachers', 'nome cognome');  // Cambiato da docenti a teachers
+                .populate('schoolId', 'name type')  // Aggiornati i campi del populate
+                .populate('students', 'firstName lastName')  // Aggiornati i campi del populate
+                .populate('teachers', 'firstName lastName');  // Aggiornati i campi del populate
 
             if (!classe) {
                 return res.status(404).json({
@@ -61,16 +60,16 @@ const classController = {
     // POST - Crea una nuova classe
     createClass: async (req, res) => {
         try {
-            const { numero, sezione } = req.body;  // Cambiato da nome a numero
-            const school = req.user.scuola;
-            const annoScolastico = ClassService.getCurrentSchoolYear();
+            const { number, section } = req.body;  // Cambiato da numero, sezione a number, section
+            const schoolId = req.user.schoolId;    // Cambiato da scuola a schoolId
+            const schoolYear = ClassService.getCurrentSchoolYear();  // Cambiato da annoScolastico a schoolYear
 
             // Verifica se la classe esiste già
             const existingClass = await Class.findOne({
-                numero,          // Cambiato da nome a numero
-                sezione,
-                annoScolastico,
-                school          // Cambiato da scuola a school
+                number,          // Cambiato da numero a number
+                section,         // Cambiato da sezione a section
+                schoolYear,      // Cambiato da annoScolastico a schoolYear
+                schoolId         // Cambiato da school a schoolId
             });
 
             if (existingClass) {
@@ -82,8 +81,8 @@ const classController = {
 
             const newClass = await Class.create({
                 ...req.body,
-                school,          // Assicurati che venga usata la scuola dell'utente
-                annoScolastico   // Usa l'anno scolastico calcolato
+                schoolId,    // Cambiato da school a schoolId
+                schoolYear   // Cambiato da annoScolastico a schoolYear
             });
             
             res.status(201).json({
@@ -105,7 +104,7 @@ const classController = {
             const updatedClass = await Class.findOneAndUpdate(
                 {
                     _id: req.params.id,
-                    school: req.user.scuola  // Aggiungi controllo della scuola
+                    schoolId: req.user.schoolId  // Cambiato da school a schoolId
                 },
                 req.body,
                 { new: true, runValidators: true }
@@ -136,7 +135,7 @@ const classController = {
         try {
             const deletedClass = await Class.findOneAndDelete({
                 _id: req.params.id,
-                school: req.user.scuola  // Aggiungi controllo della scuola
+                schoolId: req.user.schoolId  // Cambiato da school a schoolId
             });
 
             if (!deletedClass) {

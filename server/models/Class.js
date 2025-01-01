@@ -1,10 +1,11 @@
 const mongoose = require('mongoose');
 
 const classSchema = new mongoose.Schema({
-    name: {  // Cambiato da 'nome' a 'numero'
-        type: String,
+    number: {  
+        type: Number,
         required: [true, 'Il numero della classe è obbligatorio'],
-        trim: true
+        min: [1, 'Il numero della classe deve essere almeno 1'],
+        max: [5, 'Il numero della classe non può essere maggiore di 5']
     },
     section: {
         type: String,
@@ -22,20 +23,20 @@ const classSchema = new mongoose.Schema({
             message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
         }
     },
-    schoolId: {  // Cambiato da 'scuola' a 'school'
+    schoolId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
         required: [true, 'Il riferimento alla scuola è obbligatorio']
     },
-    specialization: {          // nuovo campo
+    specialization: {
         type: String,
         required: false
     },
-    students: [{  // Cambiato da 'studenti' a 'students'
+    students: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student'
     }],
-    teachers: [{  // Cambiato da 'docenti' a 'teachers'
+    teachers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }]
@@ -43,21 +44,20 @@ const classSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Aggiornato l'indice con i nuovi nomi dei campi
-classSchema.index({ schoolId: 1, name: 1, section: 1, schoolYear: 1 }, { unique: true });
+// Indici aggiornati
+classSchema.index({ schoolId: 1, number: 1, section: 1, schoolYear: 1 }, { unique: true });
 classSchema.index({ schoolId: 1 });
 
+// Virtual per il nome completo della classe
 classSchema.virtual('fullName').get(function() {
-    return `${this.name}${this.section}`;
+    return `${this.number}${this.section}`;
 });
 
-
-// Aggiornato il metodo con il nuovo nome del campo
+// Metodi per la gestione degli studenti
 classSchema.methods.hasStudent = function(studentId) {
     return this.students.includes(studentId);
 };
 
-// Aggiornato il metodo con il nuovo nome del campo
 classSchema.methods.addStudent = function(studentId) {
     if (!this.hasStudent(studentId)) {
         this.students.push(studentId);
@@ -65,15 +65,10 @@ classSchema.methods.addStudent = function(studentId) {
     return this;
 };
 
-// Aggiornato il virtual con il nuovo nome del campo
-classSchema.virtual('nomeCompleto').get(function() {
-    return `${this.numero}${this.sezione}`;
-});
-
-// Middleware pre-save rimane invariato
+// Middleware pre-save per la conversione della sezione in maiuscolo
 classSchema.pre('save', function(next) {
-    if (this.sezione) {
-        this.sezione = this.sezione.toUpperCase();
+    if (this.section) {
+        this.section = this.section.toUpperCase();
     }
     next();
 });
