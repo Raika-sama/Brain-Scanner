@@ -136,7 +136,7 @@ const Classes = () => {
               <React.Fragment key={cls._id}>
                 <ListItem>
                   <ListItemText
-                    primary={`${cls.name} ${cls.section}`}
+                    primary={`${cls.year}${cls.section}`}
                     secondary={`${cls.specialization} - ${cls.students?.length || 0} studenti`}
                   />
                 </ListItem>
@@ -147,39 +147,29 @@ const Classes = () => {
         </CardContent>
       </Card>
 
-      {/* Ultimi Aggiornamenti (Hardcoded per ora) */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            <UpdateIcon sx={{ mr: 1, color: 'primary.main' }} />
-            <Typography variant="h6">
-              Ultimi Aggiornamenti
-            </Typography>
-          </Box>
-          <List>
-            <ListItem>
-              <ListItemText
-                primary="Nuovo test assegnato"
-                secondary="Il test 'Matematica Base' è stato assegnato alla classe 1A"
-              />
-            </ListItem>
-            <Divider />
-            <ListItem>
-              <ListItemText
-                primary="Completamento Test"
-                secondary="La classe 2B ha completato il test 'Fisica Avanzata'"
-              />
-            </ListItem>
-            <Divider />
-            <ListItem>
-              <ListItemText
-                primary="Nuovi Studenti"
-                secondary="3 nuovi studenti sono stati aggiunti alla classe 1C"
-              />
-            </ListItem>
-          </List>
-        </CardContent>
-      </Card>
+      {/* Ultimi Aggiornamenti - aggiorniamo anche il formato delle classi qui */}
+      <List>
+        <ListItem>
+          <ListItemText
+            primary="Nuovo test assegnato"
+            secondary="Il test 'Matematica Base' è stato assegnato alla classe 1A"
+          />
+        </ListItem>
+        <Divider />
+        <ListItem>
+          <ListItemText
+            primary="Completamento Test"
+            secondary="La classe 2B ha completato il test 'Fisica Avanzata'"
+          />
+        </ListItem>
+        <Divider />
+        <ListItem>
+          <ListItemText
+            primary="Nuovi Studenti"
+            secondary="3 nuovi studenti sono stati aggiunti alla classe 1C"
+          />
+        </ListItem>
+      </List>
     </Box>
   );
 };

@@ -74,16 +74,25 @@ const studentController = {
         session.startTransaction();
 
         try {
-            const { nome, cognome, sesso, classe: numeroClasse, sezione, note } = req.body;
-            const scuola = req.user.scuola;
+            const { 
+                nome, 
+                cognome, 
+                sesso, 
+                classe: classeId,  // Ora riceviamo direttamente l'ID della classe
+                sezione,
+                annoScolastico,
+                note 
+            } = req.body;
+            const school = req.user.schoolId;  // Uso schoolId invece di scuola per consistenza
 
             // Verifica duplicati
             const existingStudent = await Student.findOne({
                 nome,
                 cognome,
-                school: scuola,
-                'classe.numero': numeroClasse,
-                'classe.sezione': sezione
+                school,
+                classe: classeId,
+                sezione,
+                annoScolastico
             });
 
             if (existingStudent) {
@@ -93,22 +102,25 @@ const studentController = {
                 });
             }
 
-            // Trova o crea la classe
-            const classe = await ClassService.findOrCreateClass({
-                numero: numeroClasse,
-                sezione,
-                annoScolastico: ClassService.getCurrentSchoolYear(),
-                school: scuola
-            }, session);
+            // Verifica che la classe esista
+            const classeExists = await Class.findById(classeId);
+            if (!classeExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: 'Classe non trovata'
+                });
+            }
 
             // Crea lo studente
             const student = new Student({
                 nome,
                 cognome,
                 sesso: sesso.toUpperCase(),
-                classe: classe._id,
-                school: scuola,
-                teachers: [req.user._id],
+                classe: classeId,
+                sezione,
+                annoScolastico,
+                school,
+                teachers: [req.user._id],  // Aggiungi l'utente corrente come insegnante
                 note: note || ''
             });
 
@@ -116,7 +128,7 @@ const studentController = {
 
             // Aggiorna la classe con il nuovo studente
             await Class.findByIdAndUpdate(
-                classe._id,
+                classeId,
                 { $addToSet: { students: student._id } },
                 { session }
             );
@@ -125,7 +137,8 @@ const studentController = {
 
             // Popola i dati per la risposta
             const populatedStudent = await Student.findById(student._id)
-                .populate('classe', 'numero sezione annoScolastico');
+                .populate('classe', 'number section schoolYear')  // Aggiornati i nomi dei campi
+                .populate('teachers', 'firstName lastName email');  // Aggiungiamo i dati degli insegnanti
 
             res.status(201).json({
                 success: true,

@@ -60,29 +60,46 @@ const classController = {
     // POST - Crea una nuova classe
     createClass: async (req, res) => {
         try {
-            const { number, section } = req.body;  // Cambiato da numero, sezione a number, section
-            const schoolId = req.user.schoolId;    // Cambiato da scuola a schoolId
-            const schoolYear = ClassService.getCurrentSchoolYear();  // Cambiato da annoScolastico a schoolYear
-
+            const { number, section, schoolId } = req.body;  // Aggiungiamo schoolId dal body
+            const schoolYear = ClassService.getCurrentSchoolYear();
+    
+            // Validazione della presenza di schoolId
+            if (!schoolId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'schoolId è obbligatorio'
+                });
+            }
+    
             // Verifica se la classe esiste già
             const existingClass = await Class.findOne({
-                number,          // Cambiato da numero a number
-                section,         // Cambiato da sezione a section
-                schoolYear,      // Cambiato da annoScolastico a schoolYear
-                schoolId         // Cambiato da school a schoolId
+                number,
+                section,
+                schoolYear,
+                schoolId
             });
-
+    
             if (existingClass) {
                 return res.status(400).json({
                     success: false,
                     message: 'Questa classe esiste già per questa scuola e anno scolastico'
                 });
             }
-
+    
+            // Verifica che la scuola esista
+            const schoolExists = await School.findById(schoolId);
+            if (!schoolExists) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'La scuola specificata non esiste'
+                });
+            }
+    
             const newClass = await Class.create({
-                ...req.body,
-                schoolId,    // Cambiato da school a schoolId
-                schoolYear   // Cambiato da annoScolastico a schoolYear
+                number,
+                section,
+                schoolYear,
+                schoolId
             });
             
             res.status(201).json({

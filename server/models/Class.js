@@ -44,34 +44,26 @@ const classSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Indici aggiornati
-classSchema.index({ schoolId: 1, number: 1, section: 1, schoolYear: 1 }, { unique: true });
-classSchema.index({ schoolId: 1 });
-
-// Virtual per il nome completo della classe
-classSchema.virtual('fullName').get(function() {
-    return `${this.number}${this.section}`;
+// Rimuovi tutti gli indici esistenti eccetto _id
+classSchema.indexes().forEach(async (index) => {
+    if (!index[0]._id) {
+        await mongoose.model('Class').collection.dropIndex(index[0]);
+    }
 });
 
-// Metodi per la gestione degli studenti
-classSchema.methods.hasStudent = function(studentId) {
-    return this.students.includes(studentId);
-};
-
-classSchema.methods.addStudent = function(studentId) {
-    if (!this.hasStudent(studentId)) {
-        this.students.push(studentId);
+// Crea un nuovo indice con i nomi corretti
+classSchema.index(
+    { 
+        schoolId: 1, 
+        number: 1, 
+        section: 1, 
+        schoolYear: 1 
+    }, 
+    { 
+        unique: true,
+        name: 'class_unique_composite_index'
     }
-    return this;
-};
-
-// Middleware pre-save per la conversione della sezione in maiuscolo
-classSchema.pre('save', function(next) {
-    if (this.section) {
-        this.section = this.section.toUpperCase();
-    }
-    next();
-});
+);
 
 const Class = mongoose.model('Class', classSchema);
 

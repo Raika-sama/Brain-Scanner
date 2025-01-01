@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const School = require('../models/Schools');  // Nota: usando il tuo nome file
+const ClassService = require('../services/classService');
 const { authMiddleware } = require('../middleware/authMiddleware');
 
 

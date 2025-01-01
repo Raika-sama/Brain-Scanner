@@ -6,7 +6,24 @@ import { toast } from 'react-hot-toast';
 import axios from '../utils/axios'; // Importa l'istanza axios configurata
 
 const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
+  // Verifica iniziale delle props
+  useEffect(() => {
+    console.log('=== PROPS STUDENT MODAL ===');
+    console.log('schoolConfig:', schoolConfig);
+    console.log('isOpen:', isOpen);
+    console.log('student:', student);
+  }, [schoolConfig, isOpen, student]);
+
   // Stati base
+  console.log('StudentModal props:', { isOpen, student, schoolConfig });
+  
+  // Verifica che schoolConfig sia valido
+  useEffect(() => {
+    if (schoolConfig && !schoolConfig._id) {
+      console.error('schoolConfig non contiene _id:', schoolConfig);
+    }
+  }, [schoolConfig]);  
+  
   const [formData, setFormData] = useState({
     name: '',
     cognome: '',
@@ -23,6 +40,24 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   const [existingClasses, setExistingClasses] = useState([]);
   const [shouldCreateNewClass, setShouldCreateNewClass] = useState(false);
   const [isCheckingClass, setIsCheckingClass] = useState(false);
+  
+  
+  const [currentSchoolYear, setCurrentSchoolYear] = useState(null);
+ 
+ 
+  // Aggiungi questo useEffect per caricare l'anno scolastico
+  const getCurrentSchoolYear = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    if (currentMonth >= 9) {
+      return `${currentYear}/${currentYear + 1}`;
+    } else {
+      return `${currentYear - 1}/${currentYear}`;
+    }
+  };
+
 
   // Opzioni della scuola (invariato)
   const schoolOptions = useMemo(() => ({
@@ -104,59 +139,92 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!validateForm()) return;
-    
+    // Log iniziale
+    console.log('=== INIZIO SUBMIT ===');
+    console.log('schoolConfig ricevuto:', schoolConfig);
+
+    if (!validateForm()) {
+      console.log('Validazione form fallita');
+      return;
+    }
+
     setIsLoading(true);
     try {
+      // Creiamo prima studentData
       const studentData = {
         ...formData,
         school: schoolConfig._id,
-        annoScolastico: ClassService.getCurrentSchoolYear()
+        annoScolastico: getCurrentSchoolYear()
       };
 
+      console.log('=== DATI STUDENTE ===');
+      console.log('studentData:', studentData);
+
       if (shouldCreateNewClass) {
+        // Prima di creare la classe, verifichiamo tutti i dati necessari
+        const classData = {
+          number: parseInt(formData.classe),
+          section: formData.sezione.toUpperCase(),
+          schoolYear: getCurrentSchoolYear(),
+          schoolId: schoolConfig._id
+        };
+
+        // Log dei dati della classe
+        console.log('=== DATI CLASSE DA CREARE ===');
+        console.log(JSON.stringify(classData, null, 2));
+
         const createClass = window.confirm(
           `La classe ${formData.classe}${formData.sezione} non esiste. Vuoi crearla?`
         );
 
         if (createClass) {
-          // Crea la nuova classe
-          const newClassResponse = await axios.post('/api/classes', {
-            numero: formData.classe,
-            sezione: formData.sezione,
-            school: schoolConfig._id
-          });
+          try {
+            // Log prima della chiamata API
+            console.log('=== CHIAMATA API CREAZIONE CLASSE ===');
+            console.log('Dati inviati:', classData);
 
-          // Aggiungi l'ID della classe appena creata allo studente
-          studentData.classe = newClassResponse.data.data._id;
-        } else {
+            const newClassResponse = await axios.post('/api/classes', classData);
+            
+            console.log('=== RISPOSTA API CLASSE ===');
+            console.log(newClassResponse.data);
+
+            if (newClassResponse.data.success) {
+              // Aggiorniamo studentData con l'ID della classe appena creata
+              studentData.classe = newClassResponse.data.data._id;
+              
+    
+            } 
+            
+          } catch (classError) {
+            console.error('Errore creazione classe:', classError.response?.data);
+            toast.error(classError.response?.data?.message || 'Errore durante la creazione della classe');
+            setIsLoading(false);
+            return;
+            }
+         } else {
           setIsLoading(false);
           return;
+          }
         }
-      } else {
-        // Usa l'ID della classe esistente
-        const existingClass = existingClasses.find(
-          c => c.numero === formData.classe && c.sezione === formData.sezione
-        );
-        if (existingClass) {
-          studentData.classe = existingClass._id;
-        }
-      }
 
-      await onSubmit(studentData);
-      toast.success(student ? 'Studente modificato con successo' : 'Studente aggiunto con successo');
-      onClose();
-    } catch (error) {
-      console.error('Errore durante il salvataggio:', error);
-      if (error.response?.data?.message) {
-        toast.error(error.response.data.message);
+      // Invio finale dei dati dello studente
+      console.log('=== INVIO DATI STUDENTE ===');
+      console.log('Dati finali studente:', studentData);
+      
+      const result = await onSubmit(studentData);
+      if (result && result.success) {
+        toast.success(student ? 'Studente modificato con successo' : 'Studente aggiunto con successo');
+        onClose();
       } else {
-        toast.error('Errore durante il salvataggio dello studente');
+        toast.error(result?.message || 'Errore durante il salvataggio dello studente');
       }
+    } catch (error) {
+      console.error('Errore generale:', error);
+      toast.error(error.response?.data?.message || 'Errore durante il salvataggio dello studente');
     } finally {
       setIsLoading(false);
     }
-  };
+};
 
   if (!isOpen) return null;
 

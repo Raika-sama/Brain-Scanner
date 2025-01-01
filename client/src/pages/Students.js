@@ -4,21 +4,20 @@ import { FileUp, Plus, Search, Edit2, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import StudentModal from '../components/StudentModal';
 import { toast } from 'react-hot-toast';
+import { useApp } from '../context/AppContext';
 
 const STUDENTS_PER_PAGE = 10;
 
 const Students = () => {
-  // Stati per la gestione degli studenti
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { state, dispatch } = useApp();
+  
+  // Stati per UI
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [schoolConfig, setSchoolConfig] = useState(null);
-
+  
   // Stati per i filtri
   const [filters, setFilters] = useState({
     search: '',
@@ -27,30 +26,32 @@ const Students = () => {
     gender: ''
   });
 
-  // Effetto per caricare la configurazione della scuola
   useEffect(() => {
     const fetchSchoolConfig = async () => {
       try {
+        dispatch({ type: 'SET_LOADING', payload: true });
         const response = await axios.get('http://localhost:5000/api/schools/assigned');
         if (response.data.success && response.data.data) {
-          console.log('School config received:', response.data.data);
-          setSchoolConfig(response.data.data);
+          dispatch({ type: 'SET_SCHOOL_CONFIG', payload: response.data.data });
         } else {
-          setError('Nessuna scuola assegnata');
+          dispatch({ type: 'SET_ERROR', payload: 'Nessuna scuola assegnata' });
         }
       } catch (error) {
         console.error('Errore nel recupero configurazione scuola:', error);
-        setError('Errore nel caricamento della configurazione della scuola');
+        dispatch({ 
+          type: 'SET_ERROR', 
+          payload: 'Errore nel caricamento della configurazione della scuola' 
+        });
       }
     };
 
     fetchSchoolConfig();
-  }, []);
+  }, [dispatch]);
 
-  // Effetto per caricare gli studenti
   useEffect(() => {
     const fetchStudents = async () => {
       try {
+        dispatch({ type: 'SET_LOADING', payload: true });
         const response = await axios.get('http://localhost:5000/api/students', {
           params: {
             page: currentPage,
@@ -60,23 +61,22 @@ const Students = () => {
         });
         
         if (response.data.success) {
-          setStudents(response.data.data);
+          dispatch({ type: 'SET_STUDENTS', payload: response.data.data });
           setTotalPages(Math.ceil(response.data.total / STUDENTS_PER_PAGE));
         } else {
-          setError('Errore nel caricamento degli studenti');
+          dispatch({ type: 'SET_ERROR', payload: 'Errore nel caricamento degli studenti' });
         }
       } catch (error) {
         console.error('Errore nel recupero degli studenti:', error);
-        setError('Errore nel caricamento degli studenti');
+        dispatch({ type: 'SET_ERROR', payload: 'Errore nel caricamento degli studenti' });
       } finally {
-        setLoading(false);
+        dispatch({ type: 'SET_LOADING', payload: false });
       }
     };
 
     fetchStudents();
-  }, [currentPage, filters]);
+  }, [currentPage, filters, dispatch]);
 
-  // Handlers
   const handleFilterChange = (name, value) => {
     setFilters(prev => ({ ...prev, [name]: value }));
     setCurrentPage(1);
@@ -97,7 +97,10 @@ const Students = () => {
     
     try {
       await axios.delete(`http://localhost:5000/api/students/${studentId}`);
-      setStudents(prev => prev.filter(s => s._id !== studentId));
+      dispatch({
+        type: 'DELETE_STUDENT',
+        payload: studentId
+      });
       toast.success('Studente eliminato con successo');
     } catch (error) {
       toast.error('Errore durante l\'eliminazione dello studente');
@@ -106,19 +109,29 @@ const Students = () => {
 
   const handleStudentSubmit = async (data) => {
     try {
-      console.log('Dati ricevuti dal modal:', data); // Per debugging
-
       if (selectedStudent) {
-        // Logica per la modifica (la gestiamo dopo)
+        const response = await axios.put(
+          `http://localhost:5000/api/students/${selectedStudent._id}`, 
+          data
+        );
+        if (response.data.success) {
+          dispatch({
+            type: 'UPDATE_STUDENT',
+            payload: response.data.data
+          });
+          toast.success('Studente modificato con successo');
+        }
       } else {
         const response = await axios.post('http://localhost:5000/api/students', data);
-        console.log('Risposta dal server:', response.data); // Per debugging
-
         if (response.data.success) {
-          // Aggiorna la lista degli studenti
-          const newStudent = response.data.data;
-          setStudents(prev => [...prev, newStudent]);
-          toast.success(response.data.message || 'Studente aggiunto con successo');
+          dispatch({
+            type: 'ADD_STUDENT',
+            payload: {
+              student: response.data.data,
+              classId: data.classId
+            }
+          });
+          toast.success('Studente aggiunto con successo');
         }
       }
       setIsModalOpen(false);
@@ -126,9 +139,9 @@ const Students = () => {
       console.error('Errore completo:', error.response?.data);
       toast.error(error.response?.data?.message || 'Errore durante il salvataggio');
     }
-};
+  };
 
-  if (loading) {
+  if (state.loading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -136,6 +149,9 @@ const Students = () => {
     );
   }
 
+  console.log('state.schoolConfig:', state.schoolConfig);
+  console.log('Componente padre - state:', state);
+  console.log('Componente padre - schoolConfig:', state.schoolConfig);
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -151,11 +167,9 @@ const Students = () => {
           </button>
         </div>
       </div>
-
-      {/* Filtri */}
-      <Card className="p-4">
+{/* Filtri */}
+<Card className="p-4">
         <div className="space-y-4">
-          {/* Barra di ricerca */}
           <div className="flex gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -174,7 +188,7 @@ const Students = () => {
             >
               <option value="">Tutte le classi</option>
               {Array.from(
-                { length: schoolConfig?.tipo_istituto === 'primo_grado' ? 3 : 5 }, 
+                { length: state.schoolConfig?.tipo_istituto === 'primo_grado' ? 3 : 5 }, 
                 (_, i) => (
                   <option key={i + 1} value={i + 1}>{i + 1}</option>
                 )
@@ -186,7 +200,7 @@ const Students = () => {
               onChange={(e) => handleFilterChange('section', e.target.value)}
             >
               <option value="">Tutte le sezioni</option>
-              {schoolConfig?.sezioni_disponibili.map(sezione => (
+              {state.schoolConfig?.sezioni_disponibili.map(sezione => (
                 <option key={sezione} value={sezione}>{sezione}</option>
               ))}
             </select>
@@ -202,9 +216,8 @@ const Students = () => {
           </div>
         </div>
       </Card>
-
-      {/* Tabella Studenti */}
-      <Card className="overflow-hidden">
+{/* Tabella Studenti */}
+<Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50">
@@ -217,7 +230,7 @@ const Students = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {students.map((student) => (
+              {state.students.map((student) => (
                 <tr key={student._id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">{student.nome}</td>
                   <td className="px-6 py-4 whitespace-nowrap">{student.cognome}</td>
@@ -245,7 +258,6 @@ const Students = () => {
           </table>
         </div>
       </Card>
-
       {/* Paginazione */}
       {totalPages > 1 && (
         <div className="flex justify-center mt-4">
@@ -270,17 +282,17 @@ const Students = () => {
         </div>
       )}
 
+
       {/* Modals */}
-      {schoolConfig && (
+      {state.schoolConfig && (
         <>
           <StudentModal 
             isOpen={isModalOpen}
             onClose={() => setIsModalOpen(false)}
             onSubmit={handleStudentSubmit}
             student={selectedStudent}
-            schoolConfig={schoolConfig}
+            schoolConfig={state.schoolConfig}
           />
-        
         </>
       )}
     </div>

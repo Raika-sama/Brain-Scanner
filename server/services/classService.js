@@ -37,12 +37,14 @@ class ClassService {
     // Calcola l'anno scolastico corrente (questo metodo è già corretto)
     static getCurrentSchoolYear() {
         const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1;
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1;
         
-        const schoolYear = month >= 9 ? `${year}/${year + 1}` : `${year - 1}/${year}`;
-        console.log('Anno scolastico calcolato:', schoolYear);
-        return schoolYear;
+        if (currentMonth >= 9) {
+            return `${currentYear}/${currentYear + 1}`;
+        } else {
+            return `${currentYear - 1}/${currentYear}`;
+        }
     }
 
     // Valida la classe rispetto al tipo di scuola

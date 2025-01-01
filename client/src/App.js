@@ -8,16 +8,14 @@ import ClassDetail from './pages/ClassDetail';
 import Classes from './pages/Classes';
 import SchoolPage from './pages/SchoolPage';
 import Students from './pages/Students';
-// Fix the import path to match component name
+import { AppProvider } from './context/AppContext';
 
-const App = () => {  // Corretta la sintassi della dichiarazione
-  // Funzione per verificare se l'utente è autenticato
+const App = () => {
   const isAuthenticated = () => {
     const token = localStorage.getItem('token');
     return !!token;
   };
 
-  // Componente per proteggere le route
   const ProtectedRoute = ({ children }) => {
     if (!isAuthenticated()) {
       return <Navigate to="/login" replace />;
@@ -26,28 +24,28 @@ const App = () => {  // Corretta la sintassi della dichiarazione
   };
 
   return (
-    <Router>
-      <Routes>
-        {/* Route pubblica per il login */}
-        <Route path="/login" element={
-          isAuthenticated() ? <Navigate to="/dashboard" replace /> : <LoginPage />
-        } />
+    <AppProvider>  {/* Aggiungiamo solo questo wrapper */}
+      <Router>
+        <Routes>
+          <Route path="/login" element={
+            isAuthenticated() ? <Navigate to="/dashboard" replace /> : <LoginPage />
+          } />
 
-        {/* Route protette wrappate nel MainLayout */}
-        <Route path="/" element={
-          <ProtectedRoute>
-            <MainLayout />
-          </ProtectedRoute>
-        }>
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="schools" element={<SchoolPage />} /> {/* Aggiunta route per schools */}
-          <Route path="classes" element={<Classes />} />
-          <Route path="classes/:classId" element={<ClassDetail />} />
-          <Route path="students" element={<Students />} /> {/* Aggiungi solo questa riga */}
-          <Route index element={<Navigate to="/dashboard" replace />} />
-        </Route>
-      </Routes>
-    </Router>
+          <Route path="/" element={
+            <ProtectedRoute>
+              <MainLayout />
+            </ProtectedRoute>
+          }>
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="schools" element={<SchoolPage />} />
+            <Route path="classes" element={<Classes />} />
+            <Route path="classes/:classId" element={<ClassDetail />} />
+            <Route path="students" element={<Students />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+          </Route>
+        </Routes>
+      </Router>
+    </AppProvider>
   );
 };
 

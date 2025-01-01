@@ -110,7 +110,7 @@ const ClassDetail = () => {
               Classi
             </Link>
             <Typography color="primary">
-              {classData?.nome} {classData?.sezione}
+              {classData?.number} {classData?.section}
             </Typography>
           </Breadcrumbs>
         </Box>
@@ -123,18 +123,18 @@ const ClassDetail = () => {
             color: 'white'
           }}
         >
-          <Typography variant="h4" component="h1" gutterBottom>
-            Classe {classData?.nome} {classData?.sezione}
+           <Typography variant="h4" component="h1" gutterBottom>
+            Classe {classData?.number} {classData?.section}  {/* Cambiato da nome e sezione */}
           </Typography>
           <Typography variant="subtitle1">
-            Anno Scolastico: {classData?.annoScolastico}
+            Anno Scolastico: {classData?.schoolYear}  {/* Cambiato da annoScolastico */}
           </Typography>
           <Box sx={{ mt: 2, display: 'flex', gap: 4 }}>
             <Typography>
-              Studenti: {classData?.studenti?.length || 0}
+              Studenti: {classData?.students?.length || 0}  {/* Cambiato da studenti */}
             </Typography>
             <Typography>
-              Docenti: {classData?.docenti?.length || 0}
+              Docenti: {classData?.teachers?.length || 0}  {/* Cambiato da docenti */}
             </Typography>
           </Box>
         </Paper>

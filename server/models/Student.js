@@ -24,6 +24,22 @@ const studentSchema = new mongoose.Schema({
         ref: 'Class',
         required: true
     },
+    sezione: {                    // Aggiunto campo sezione
+        type: String,
+        required: true,
+        uppercase: true,
+        trim: true
+    },
+    annoScolastico: {            // Aggiunto campo annoScolastico
+        type: String,
+        required: true,
+        validate: {
+            validator: function(v) {
+                return /^\d{4}\/\d{4}$/.test(v);
+            },
+            message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
+        }
+    },
     school: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
