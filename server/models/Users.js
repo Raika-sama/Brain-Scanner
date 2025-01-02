@@ -1,43 +1,74 @@
-// server/models/User.js
-//mongoose.Schema: Definisce la struttura del documento utente nel database.
-//nome, cognome, email, password: Campi stringa obbligatori.
-//email: Deve essere univoca, per evitare utenti duplicati.
-//ruolo: Campo stringa che definisce il ruolo dell'utente. Può assumere solo i valori studente, insegnante o amministratore. Il valore di default è studente.
-//mongoose.model: Crea un modello Mongoose chiamato User basato sullo schema userSchema.
-//module.exports: Esporta il modello User in modo che possa essere utilizzato in altri file.
-
 const mongoose = require('mongoose');
 
-
+/**
+* User Schema Definition
+* Represents users in the system with different roles and authentication details
+*/
 const userSchema = new mongoose.Schema({
-  nome: {
-    type: String,
-    required: true
-  },
-  cognome: {
-    type: String,
-    required: true
-  },
-  email: {
-    type: String,
-    required: true,
-    unique: true
-  },
-  password: {
-    type: String,
-    required: true
-  },
-  ruolo: {
-    type: String,
-    enum: ['studente', 'insegnante', 'amministratore'], // Definisce i ruoli possibili
-    default: 'studente'
-  },
-  school: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'School'  // Riferimento al modello School
-  }
-}, { timestamps: true});
+   // Basic user information
+   firstName: {
+       type: String,
+       required: true,
+       trim: true
+   },
+   lastName: {
+       type: String,
+       required: true,
+       trim: true
+   },
+   email: {
+       type: String,
+       required: true,
+       unique: true,
+       trim: true,
+       lowercase: true
+   },
+   password: {
+       type: String,
+       required: true
+   },
 
+   // User role and status
+   role: {
+       type: String,
+       enum: ['teacher', 'admin'],
+       required: true
+   },
+   isActive: {
+       type: Boolean,
+       default: true
+   },
+
+   // System metadata
+   lastLogin: {
+       type: Date
+   },
+   passwordResetToken: String,
+   passwordResetExpires: Date
+}, { 
+   timestamps: true 
+});
+
+// Indexes for common queries
+userSchema.index({ email: 1 });
+userSchema.index({ role: 1 });
+
+/**
+* Methods to handle user-school relationships
+* Note: Actual school relationships are stored in School model
+*/
+userSchema.methods.getSchools = async function() {
+   return await mongoose.model('School').find({
+       'users.user': this._id
+   });
+};
+
+userSchema.methods.getDefaultSchool = async function() {
+   return await mongoose.model('School').findOne({
+       'users.user': this._id,
+       'users.isDefault': true
+   });
+};
+
+// Export the model
 module.exports = mongoose.model('User', userSchema);
-
-

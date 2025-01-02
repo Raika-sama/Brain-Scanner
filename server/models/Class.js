@@ -1,83 +1,96 @@
 const mongoose = require('mongoose');
 
+/**
+ * Class Schema Definition
+ * Represents a school class with inheritance from school settings
+ */
 const classSchema = new mongoose.Schema({
-    number: {  
-        type: Number,
-        required: [true, 'Il numero della classe è obbligatorio'],
-        min: [1, 'Il numero della classe deve essere almeno 1'],
-        max: [5, 'Il numero della classe non può essere maggiore di 5']
+    // Basic class information
+    name: {
+        type: String,
+        required: true
     },
     section: {
         type: String,
-        required: [true, 'La sezione è obbligatoria'],
-        trim: true,
-        uppercase: true
-    },
-    schoolYear: {
-        type: String,
-        required: [true, "L'anno scolastico è obbligatorio"],
+        required: true,
+        uppercase: true,
         validate: {
-            validator: function(v) {
-                return /^\d{4}\/\d{4}$/.test(v);
+            validator: async function(v) {
+                const school = await this.model('School').findById(this.schoolId);
+                return school.sections.includes(v);
             },
-            message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
+            message: 'Invalid section for this school'
         }
     },
+    year: {
+        type: Number,
+        required: true,
+        validate: {
+            validator: async function(v) {
+                const school = await this.model('School').findById(this.schoolId);
+                return v <= school.numberOfYears;
+            },
+            message: 'Invalid year for this school type'
+        }
+    },
+
+    // School relationship
     schoolId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
-        required: [true, 'Il riferimento alla scuola è obbligatorio']
+        required: true
     },
-    // Aggiungiamo il teacher principale
-    teacherId: {
+
+    // Teachers management
+    mainTeacher: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: [true, 'Il teacher principale è obbligatorio']
+        required: true
     },
-    specialization: {
-        type: String,
-        required: false
-    },
+    teachers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+
+    // Students management
     students: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student'
     }],
-    teachers: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    }]
+
+    // Academic information
+    academicYear: {
+        type: String,
+        required: true,
+        validate: {
+            validator: function(v) {
+                return /^\d{4}\/\d{4}$/.test(v);
+            },
+            message: 'Invalid academic year format (YYYY/YYYY)'
+        }
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    }
 }, {
     timestamps: true
 });
 
-// Aggiorniamo gli indici per includere teacherId
-classSchema.index(
-    { 
-        schoolId: 1, 
-        number: 1, 
-        section: 1, 
-        schoolYear: 1,
-        teacherId: 1 
-    }, 
-    { 
-        unique: true,
-        name: 'class_unique_composite_index'
-    }
-);
-
-// Aggiungiamo un indice per le query per teacher
-classSchema.index({ teacherId: 1 });
+// Indexes
+classSchema.index({ schoolId: 1, year: 1, section: 1, academicYear: 1 }, { unique: true });
+classSchema.index({ mainTeacher: 1 });
 classSchema.index({ teachers: 1 });
 
-// Middleware per assicurarsi che il teacherId sia sempre nei teachers
+// Pre-save middleware
 classSchema.pre('save', function(next) {
-    if (this.teacherId && !this.teachers.includes(this.teacherId)) {
-        this.teachers.push(this.teacherId);
+    if (this.mainTeacher && !this.teachers.includes(this.mainTeacher)) {
+        this.teachers.push(this.mainTeacher);
     }
     next();
 });
 
-// Method per aggiungere un teacher
+// Methods
 classSchema.methods.addTeacher = function(teacherId) {
     if (!this.teachers.includes(teacherId)) {
         this.teachers.push(teacherId);
@@ -85,15 +98,12 @@ classSchema.methods.addTeacher = function(teacherId) {
     return this;
 };
 
-// Method per rimuovere un teacher (non permettiamo la rimozione del teacherId principale)
 classSchema.methods.removeTeacher = function(teacherId) {
-    if (teacherId.equals(this.teacherId)) {
-        throw new Error('Non puoi rimuovere il teacher principale');
+    if (teacherId.equals(this.mainTeacher)) {
+        throw new Error('Cannot remove main teacher');
     }
     this.teachers = this.teachers.filter(id => !id.equals(teacherId));
     return this;
 };
 
-const Class = mongoose.model('Class', classSchema);
-
-module.exports = Class;
+module.exports = mongoose.model('Class', classSchema);

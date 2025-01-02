@@ -1,68 +1,103 @@
 const mongoose = require('mongoose');
 
 const studentSchema = new mongoose.Schema({
-    nome: {
+    // Personal information
+    firstName: {
         type: String,
-        required: [true, 'Il nome è obbligatorio'],
+        required: true,
         trim: true
     },
-    cognome: {
+    lastName: {
         type: String,
-        required: [true, 'Il cognome è obbligatorio'],
+        required: true,
         trim: true
     },
-    sesso: {
+    gender: {
         type: String,
-        enum: {
-            values: ['M', 'F'],
-            message: '{VALUE} non è un valore valido per il sesso'
-        },
+        enum: ['M', 'F'],
         required: true
     },
-    classe: {
+    email: {
+        type: String,
+        trim: true,
+        lowercase: true
+    },
+
+    // Class and School information (inherited)
+    classId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Class',
         required: true
     },
-    sezione: {                    // Aggiunto campo sezione
-        type: String,
-        required: true,
-        uppercase: true,
-        trim: true
-    },
-    annoScolastico: {            // Aggiunto campo annoScolastico
-        type: String,
-        required: true,
-        validate: {
-            validator: function(v) {
-                return /^\d{4}\/\d{4}$/.test(v);
-            },
-            message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
-        }
-    },
-    school: {
+    schoolId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
-        required: [true, 'La scuola è obbligatoria']
+        required: true,
+        validate: {
+            validator: async function(v) {
+                const classDoc = await this.model('Class').findById(this.classId);
+                return classDoc.schoolId.equals(v);
+            },
+            message: 'School must match class school'
+        }
+    },
+    section: {
+        type: String,
+        required: true,
+        uppercase: true
+    },
+
+    // Teacher assignments
+    mainTeacher: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
     teachers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     }],
-    note: {
+
+    // Additional information
+    notes: {
         type: String,
         trim: true,
         default: ''
+    },
+    isActive: {
+        type: Boolean,
+        default: true
     }
 }, {
     timestamps: true
 });
 
-// Indici
-studentSchema.index({ school: 1, classe: 1 });
+// Indexes
+studentSchema.index({ classId: 1 });
+studentSchema.index({ schoolId: 1 });
+studentSchema.index({ mainTeacher: 1 });
 studentSchema.index({ teachers: 1 });
 
-// Methods
+// Pre-save middleware
+studentSchema.pre('save', async function(next) {
+    if (this.isNew) {
+        // Inherit school from class
+        const classDoc = await this.model('Class').findById(this.classId);
+        if (!classDoc) {
+            return next(new Error('Invalid class reference'));
+        }
+        this.schoolId = classDoc.schoolId;
+        this.section = classDoc.section;
+        
+        // Ensure mainTeacher is in teachers array
+        if (this.mainTeacher && !this.teachers.includes(this.mainTeacher)) {
+            this.teachers.push(this.mainTeacher);
+        }
+    }
+    next();
+});
+
+// Methods for teacher management
 studentSchema.methods.addTeacher = function(teacherId) {
     if (!this.teachers.includes(teacherId)) {
         this.teachers.push(teacherId);
@@ -71,24 +106,11 @@ studentSchema.methods.addTeacher = function(teacherId) {
 };
 
 studentSchema.methods.removeTeacher = function(teacherId) {
+    if (teacherId.equals(this.mainTeacher)) {
+        throw new Error('Cannot remove main teacher');
+    }
     this.teachers = this.teachers.filter(id => !id.equals(teacherId));
     return this;
 };
 
-// Middleware
-studentSchema.pre('save', function(next) {
-    if (this.isNew && this.teachers.length === 0) {
-        // Se è un nuovo studente e non ha teachers, aggiungi l'utente corrente
-        // Questo andrà gestito nel controller usando req.user._id
-        next(new Error('Almeno un insegnante deve essere associato'));
-    }
-    // Converti sesso in maiuscolo
-    if (this.sesso) {
-        this.sesso = this.sesso.toUpperCase();
-    }
-    next();
-});
-
-const Student = mongoose.model('Student', studentSchema);
-
-module.exports = Student;
+module.exports = mongoose.model('Student', studentSchema);
