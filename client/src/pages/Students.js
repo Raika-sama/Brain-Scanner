@@ -97,23 +97,80 @@ const Students = () => {
 
   const handleSubmit = async (studentData) => {
     try {
-      const response = await axios.post('/api/students', studentData);
-      if (response.data.success) {
-        // Aggiorna la lista degli studenti dopo l'aggiunta
-        setStudents(prev => [...prev, response.data.data]);
-        toast.success('Studente aggiunto con successo');
-        return { success: true };
-      }
-      return { success: false, message: response.data.message };
-    } catch (error) {
-      console.error('Errore salvataggio studente:', error);
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Errore durante il salvataggio' 
+      console.log('Dati studente ricevuti:', studentData);
+      console.log('School Config:', schoolConfig); // Verifichiamo i dati della scuola
+      
+      // Generiamo l'anno accademico corrente
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const academicYear = `${currentYear}/${currentYear + 1}`;
+  
+      // Prima controlliamo se la classe esiste
+      const classQueryParams = {
+        year: studentData.number,
+        section: studentData.section,
+        schoolId: schoolConfig._id,
+        academicYear: academicYear
       };
+      console.log('Ricerca classe con parametri:', classQueryParams);
+  
+      const classResponse = await axios.get('/api/classes', {
+        params: classQueryParams
+      });
+  
+      let classId;
+  
+      // Se la classe non esiste, la creiamo
+      if (!classResponse.data.data || classResponse.data.data.length === 0) {
+        const className = `${studentData.number}${studentData.section} ${academicYear}`;
+        
+        const newClassData = {
+          // Campi base
+          name: className,
+          year: parseInt(studentData.number),
+          section: studentData.section.toUpperCase(),
+          academicYear: academicYear,
+          
+          // Referencias
+          schoolId: schoolConfig._id,
+          mainTeacher: userData._id,
+          teachers: [userData._id],
+          
+          // Altri campi
+          isActive: true
+        };
+  
+        console.log('Payload creazione classe:', newClassData);
+  
+        const createClassResponse = await axios.post('/api/classes', newClassData);
+  
+        if (createClassResponse.data.success) {
+          classId = createClassResponse.data.data._id;
+          console.log('Classe creata con ID:', classId);
+        } else {
+          throw new Error(createClassResponse.data.message || 'Errore nella creazione della classe');
+        }
+      } else {
+        classId = classResponse.data.data[0]._id;
+        console.log('Classe esistente trovata con ID:', classId);
+      }
+  
+      // Resto del codice per la creazione dello studente...
+  
+    } catch (error) {
+      console.error('Payload inviato:', error.config?.data);
+      console.error('Errore completo:', error);
+      const errorMessage = error.response?.data?.message || 'Errore durante il salvataggio';
+      toast.error(errorMessage);
+      return { success: false, message: errorMessage };
     }
   };
-
+  
+  
+  
+  
+  
+  
   // Debug dei valori prima del render
   console.log('Before render:', {
     userData,

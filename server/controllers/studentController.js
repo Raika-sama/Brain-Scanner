@@ -89,77 +89,63 @@ const studentController = {
     },
 
     // POST - Crea un nuovo studente
+    // POST - Crea un nuovo studente
     createStudent: async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
-
+    
         try {
             const { 
                 firstName, 
                 lastName, 
                 gender,
-                classId,
                 notes 
             } = req.body;
-
-            // Recupera informazioni della classe
-            const classe = await Class.findById(classId);
-            if (!classe) {
-                throw new Error('Classe non trovata');
-            }
-
-            // Verifica duplicati
-            const existingStudent = await Student.findOne({
+    
+            // Verifica duplicati con la query modificata
+            const duplicateQuery = {
                 firstName,
                 lastName,
-                schoolId: req.user.schoolId,
-                classId
-            });
-
+                schoolId: req.user.schoolId,  // usa schoolId dell'utente
+            };
+    
+            const existingStudent = await Student.findOne(duplicateQuery);
             if (existingStudent) {
-                throw new Error('Esiste già uno studente con questo nome e cognome in questa classe');
+                throw new Error('Esiste già uno studente con questo nome e cognome');
             }
-
-            // Crea lo studente
-            const student = new Student({
-                firstName,
-                lastName,
+    
+            // Prepara i dati dello studente
+            const studentData = {
+                firstName: firstName.trim(),
+                lastName: lastName.trim(),
                 gender: gender.toUpperCase(),
-                schoolId: req.user.schoolId,
-                classId,
-                year: classe.year,
-                section: classe.section,
-                academicYear: classe.academicYear,
-                mainTeacher: classe.mainTeacher,
-                teachers: classe.teachers,
-                notes: notes || '',
-                isActive: true
-            });
-
+                // Usa direttamente i dati dell'utente autenticato
+                schoolId: req.user.schoolId,    // dalla sessione utente
+                mainTeacher: req.user._id,      // dalla sessione utente
+                notes: notes?.trim() || '',
+                isActive: true,
+                needsClassAssignment: true      // nuovo studente senza classe
+            };
+    
+            console.log('Creating student with data:', studentData);
+    
+            // Crea lo studente
+            const student = new Student(studentData);
             await student.save({ session });
-
-            // Aggiorna la classe correlata
-            await Class.findByIdAndUpdate(
-                classId,
-                { $addToSet: { students: student._id } },
-                { session }
-            );
-
+    
             await session.commitTransaction();
-
+    
             // Popola i dati per la risposta
             const populatedStudent = await Student.findById(student._id)
                 .populate('schoolId', 'nome tipo_istituto')
-                .populate('classId', 'year section academicYear')
-                .populate('mainTeacher', 'firstName lastName email')
-                .populate('teachers', 'firstName lastName email');
-
+                .populate('mainTeacher', 'firstName lastName email');
+    
             res.status(201).json({
                 success: true,
                 data: populatedStudent,
-                message: 'Studente creato con successo'
+                message: 'Studente creato con successo. Necessita assegnazione classe'
             });
-
+    
         } catch (error) {
             await session.abortTransaction();
             console.error('Errore in createStudent:', error);
@@ -171,6 +157,7 @@ const studentController = {
             session.endSession();
         }
     },
+
 
     // PUT - Aggiorna uno studente
     updateStudent: async (req, res) => {
@@ -309,6 +296,111 @@ const studentController = {
     },
 
 // Alla fine dell'oggetto studentController, prima di module.exports, aggiungi:
+
+// POST - Assegna una classe a uno studente
+assignClass: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { id } = req.params;
+        const { classId } = req.body;
+
+        // Trova lo studente
+        const student = await Student.findOne({
+            _id: id,
+            schoolId: req.user.schoolId,
+            isActive: true,
+            $or: [
+                { mainTeacher: req.user._id },
+                { teachers: req.user._id }
+            ]
+        });
+
+        if (!student) {
+            throw new Error('Studente non trovato o non hai i permessi');
+        }
+
+        // Trova la classe
+        const classe = await Class.findById(classId);
+        if (!classe) {
+            throw new Error('Classe non trovata');
+        }
+
+        // Verifica che la classe appartenga alla stessa scuola
+        if (!classe.schoolId.equals(student.schoolId)) {
+            throw new Error('La classe deve appartenere alla stessa scuola dello studente');
+        }
+
+        // Aggiorna lo studente
+        student.classId = classId;
+        student.section = classe.section;
+        student.needsClassAssignment = false;
+        await student.save({ session });
+
+        // Aggiorna la classe
+        await Class.findByIdAndUpdate(
+            classId,
+            { $addToSet: { students: student._id } },
+            { session }
+        );
+
+        await session.commitTransaction();
+
+        // Popola i dati per la risposta
+        const updatedStudent = await Student.findById(id)
+            .populate('schoolId', 'nome tipo_istituto')
+            .populate('classId', 'year section academicYear')
+            .populate('mainTeacher', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email');
+
+        res.json({
+            success: true,
+            data: updatedStudent,
+            message: 'Classe assegnata con successo'
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Errore in assignClass:', error);
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Errore nell\'assegnazione della classe'
+        });
+    } finally {
+        session.endSession();
+    }
+},
+
+    // GET - Recupera studenti senza classe
+    getStudentsWithoutClass: async (req, res) => {
+        try {
+            const students = await Student.find({
+                schoolId: req.user.schoolId,
+                isActive: true,
+                needsClassAssignment: true,
+                $or: [
+                    { mainTeacher: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            })
+            .populate('schoolId', 'nome tipo_istituto')
+            .populate('mainTeacher', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email')
+            .sort({ lastName: 1, firstName: 1 });
+
+            res.json({
+                success: true,
+                data: students
+            });
+        } catch (error) {
+            console.error('Errore in getStudentsWithoutClass:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Errore nel recupero degli studenti senza classe'
+            });
+        }
+    },
 
     // POST - Aggiunge un insegnante allo studente
     addTeacher: async (req, res) => {
@@ -451,17 +543,26 @@ const studentController = {
 
     getSchoolStudents: async (req, res) => {
         try {
-            const schoolId = req.user.school._id;
+            // Usa schoolId direttamente da req.user invece di req.user.school._id
+            const schoolId = req.user.schoolId;
+            
+            if (!schoolId) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'SchoolId non trovato per l\'utente corrente'
+                });
+            }
+    
             console.log('Fetching students for school:', schoolId);
             
             const students = await Student.find({ 
                 schoolId: schoolId,
                 isActive: true 
             })
-            .select('firstName lastName gender section classId notes')
-            .populate('classId', 'year section academicYear') // Aggiunto populate per avere i dati della classe
+            .select('firstName lastName gender section classId notes needsClassAssignment')
+            .populate('classId', 'year section academicYear')
             .sort({ lastName: 1, firstName: 1 });
-
+    
             res.json({
                 success: true,
                 data: students

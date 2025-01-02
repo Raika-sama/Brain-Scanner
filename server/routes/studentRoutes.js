@@ -22,27 +22,32 @@ const studentValidations = [
         .notEmpty().withMessage('Il genere è obbligatorio')
         .isIn(['M', 'F']).withMessage('Il genere deve essere M o F'),
     
-    body('mainTeacher')
-        .notEmpty().withMessage('ID insegnante principale obbligatorio')
-        .isMongoId().withMessage('ID insegnante non valido'),
-
+    // Rimuoviamo la validazione obbligatoria per mainTeacher perché verrà preso da req.user._id
+    
+    // Rendiamo section opzionale
     body('section')
-        .notEmpty().withMessage('La sezione è obbligatoria')
+        .optional()
         .matches(/^[A-Z]$/).withMessage('La sezione deve essere una lettera maiuscola'),
     
-    body('schoolId')   // aggiunto
-        .notEmpty().withMessage('ID scuola obbligatorio')
-        .isMongoId().withMessage('ID scuola non valido'),
+    // schoolId verrà preso da req.user.schoolId
     
-    body('classId')    // aggiunto
-        .notEmpty().withMessage('ID classe obbligatorio')
+    // Rendiamo classId opzionale
+    body('classId')
+        .optional()
         .isMongoId().withMessage('ID classe non valido'),
-        // Note è opzionale
+
     body('note')
         .optional()
         .trim()
         .isString().withMessage('Le note devono essere una stringa')
-    ];
+];
+
+// Aggiungiamo validazioni per l'assegnazione della classe
+const assignClassValidations = [
+    body('classId')
+        .notEmpty().withMessage('ID classe obbligatorio')
+        .isMongoId().withMessage('ID classe non valido')
+];
 
 // Validazioni per ricerca e filtri
 const searchValidations = [
@@ -122,6 +127,25 @@ router.get('/school/assigned',
     authMiddleware,
     validateRequest,
     studentController.getSchoolStudents
+);
+
+// Dopo le altre rotte, prima dell'export
+// GET - Recupera studenti senza classe
+router.get('/without-class',
+    authMiddleware,
+    validateRequest,
+    studentController.getStudentsWithoutClass
+);
+
+// POST - Assegna una classe a uno studente
+router.post('/:id/assign-class',
+    authMiddleware,
+    [
+        idValidation,
+        ...assignClassValidations
+    ],
+    validateRequest,
+    studentController.assignClass
 );
 
 module.exports = router;

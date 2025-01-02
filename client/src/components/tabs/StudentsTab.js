@@ -18,6 +18,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  CircularProgress,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -31,23 +32,22 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
   const { dispatch } = useApp();
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [formData, setFormData] = useState({  // Aggiunto formData che mancava nella definizione
+    firstName: '',
+    lastName: '',
+  });
   const [filters, setFilters] = useState({
     year: '',
     section: '',
     institutionType: ''
   });
 
-// Aggiungi i filtri
-const handleFilterChange = (filterName, value) => {
-  setFilters(prev => ({ ...prev, [filterName]: value }));
-};
-
-// Filtra gli studenti in base ai filtri attivi
-const filteredStudents = students.filter(student => {
-  if (filters.year && student.year !== filters.year) return false;
-  if (filters.section && student.section !== filters.section) return false;
-  return true;
-});
+  // Filtra gli studenti in base ai filtri attivi
+  const filteredStudents = students.filter(student => {
+    if (filters.year && student.year !== filters.year) return false;
+    if (filters.section && student.section !== filters.section) return false;
+    return true;
+  });
 
   // Handler per il click sullo studente
   const handleStudentClick = (studentId) => {
@@ -76,45 +76,34 @@ const filteredStudents = students.filter(student => {
   };
 
   const handleSubmit = () => {
-    // Qui implementeremo la logica per salvare/modificare lo studente
     console.log('Saving student:', formData);
     handleCloseDialog();
   };
 
   const handleDelete = (studentId) => {
-    // Qui implementeremo la logica per eliminare lo studente
     console.log('Deleting student:', studentId);
   };
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box sx={{ position: 'relative' }}>
       {/* Header con pulsante aggiungi */}
-      <Box 
-        sx={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          mb: 3 
-        }}
-      >
+      <Box sx={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        mb: 3 
+      }}>
         <Typography variant="h6" color="text.secondary">
-          Lista Studenti
+          Lista Studenti ({filteredStudents.length})
         </Typography>
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-          sx={{
-            backgroundColor: 'primary.light',
-            '&:hover': {
-              backgroundColor: 'primary.main',
-            },
-            borderRadius: 2,
-            px: 3
-          }}
-        >
-          Nuovo Studente
-        </Button>
       </Box>
 
       {/* Tabella Studenti */}
@@ -132,11 +121,11 @@ const filteredStudents = students.filter(student => {
               <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
                 <TableCell>Nome</TableCell>
                 <TableCell>Cognome</TableCell>
-                <TableCell align="right">Azioni</TableCell>
+                {showActions && <TableCell align="right">Azioni</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
-              {classData.students?.map((student) => (
+              {filteredStudents.map((student) => (
                 <TableRow 
                   key={student._id}
                   sx={{ 
@@ -159,30 +148,39 @@ const filteredStudents = students.filter(student => {
                   <TableCell onClick={() => handleStudentClick(student._id)}>
                     {student.lastName}
                   </TableCell>
-                  <TableCell align="right">
-                    <IconButton 
-                      size="small" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenDialog(student);
-                      }}
-                      sx={{ color: 'info.main' }}
-                    >
-                      <EditIcon />
-                    </IconButton>
-                    <IconButton 
-                      size="small" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(student._id);
-                      }}
-                      sx={{ color: 'error.light', ml: 1 }}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </TableCell>
+                  {showActions && (
+                    <TableCell align="right">
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditStudent(student);
+                        }}
+                        sx={{ color: 'info.main' }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                      <IconButton 
+                        size="small" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(student._id);
+                        }}
+                        sx={{ color: 'error.light', ml: 1 }}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
+              {filteredStudents.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={showActions ? 3 : 2} align="center">
+                    Nessuno studente trovato
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </TableContainer>
