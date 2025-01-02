@@ -1,6 +1,6 @@
 // src/components/tabs/AnalysisTab.js
 import React from 'react';
-import { useAuth } from '../../context/AuthContext';
+import { useApp } from '../../context/AppContext';
 import {
   Box,
   Typography,

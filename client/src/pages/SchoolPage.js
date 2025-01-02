@@ -15,9 +15,9 @@ import {
   AlertCircle 
 } from 'lucide-react';
 import axios from '../utils/axios';
-import { Button } from '../components/ui/button';
 import { Skeleton } from '../components/ui/skeleton';
-import { Alert, AlertDescription } from '../components/ui/alert';
+import Alert from '../components/ui/alert'
+import Button from '../components/ui/button'
 
 // Componente per le statistiche
 const StatCard = ({ icon: Icon, title, value, className }) => (

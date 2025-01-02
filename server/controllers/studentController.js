@@ -304,7 +304,168 @@ const studentController = {
         } finally {
             session.endSession();
         }
+    },
+
+// Alla fine dell'oggetto studentController, prima di module.exports, aggiungi:
+
+    // POST - Aggiunge un insegnante allo studente
+    addTeacher: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const { id } = req.params;
+            const { teacherId } = req.body;
+
+            const student = await Student.findOne({
+                _id: id,
+                schoolId: req.user.schoolId,
+                isActive: true,
+                $or: [
+                    { mainTeacher: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            });
+
+            if (!student) {
+                throw new Error('Studente non trovato o non hai i permessi');
+            }
+
+            // Verifica se l'insegnante è già associato
+            if (student.teachers.includes(teacherId)) {
+                throw new Error('Insegnante già associato allo studente');
+            }
+
+            // Aggiungi l'insegnante
+            student.teachers.push(teacherId);
+            await student.save({ session });
+
+            // Aggiorna anche la classe correlata
+            await Class.findByIdAndUpdate(
+                student.classId,
+                { $addToSet: { teachers: teacherId } },
+                { session }
+            );
+
+            await session.commitTransaction();
+
+            const updatedStudent = await Student.findById(id)
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('classId', 'year section academicYear')
+                .populate('mainTeacher', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email');
+
+            res.json({
+                success: true,
+                data: updatedStudent,
+                message: 'Insegnante aggiunto con successo'
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            console.error('Errore in addTeacher:', error);
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nell\'aggiunta dell\'insegnante'
+            });
+        } finally {
+            session.endSession();
+        }
+    },
+
+    // DELETE - Rimuove un insegnante dallo studente
+    removeTeacher: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const { id, teacherId } = req.params;
+
+            const student = await Student.findOne({
+                _id: id,
+                schoolId: req.user.schoolId,
+                isActive: true,
+                $or: [
+                    { mainTeacher: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            });
+
+            if (!student) {
+                throw new Error('Studente non trovato o non hai i permessi');
+            }
+
+            // Verifica che non sia il mainTeacher
+            if (student.mainTeacher.toString() === teacherId) {
+                throw new Error('Non puoi rimuovere l\'insegnante principale');
+            }
+
+            // Rimuovi l'insegnante
+            student.teachers = student.teachers.filter(
+                t => t.toString() !== teacherId
+            );
+            await student.save({ session });
+
+            // Aggiorna la classe solo se l'insegnante non è associato ad altri studenti
+            const otherStudentsWithTeacher = await Student.exists({
+                _id: { $ne: id },
+                classId: student.classId,
+                teachers: teacherId
+            });
+
+            if (!otherStudentsWithTeacher) {
+                await Class.findByIdAndUpdate(
+                    student.classId,
+                    { $pull: { teachers: teacherId } },
+                    { session }
+                );
+            }
+
+            await session.commitTransaction();
+
+            const updatedStudent = await Student.findById(id)
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('classId', 'year section academicYear')
+                .populate('mainTeacher', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email');
+
+            res.json({
+                success: true,
+                data: updatedStudent,
+                message: 'Insegnante rimosso con successo'
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            console.error('Errore in removeTeacher:', error);
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nella rimozione dell\'insegnante'
+            });
+        } finally {
+            session.endSession();
+        }
     }
+
+
+
+
+
+
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 module.exports = studentController;
