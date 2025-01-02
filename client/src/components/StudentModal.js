@@ -3,10 +3,9 @@ import { X } from 'lucide-react';
 import { TbMars, TbVenus } from 'react-icons/tb';
 import { Card } from "./ui/card";
 import { toast } from 'react-hot-toast';
-import axios from '../utils/axios'; // Importa l'istanza axios configurata
+import axios from '../utils/axios';
 
 const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
-  // Verifica iniziale delle props
   useEffect(() => {
     console.log('=== PROPS STUDENT MODAL ===');
     console.log('schoolConfig:', schoolConfig);
@@ -14,10 +13,8 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
     console.log('student:', student);
   }, [schoolConfig, isOpen, student]);
 
-  // Stati base
   console.log('StudentModal props:', { isOpen, student, schoolConfig });
   
-  // Verifica che schoolConfig sia valido
   useEffect(() => {
     if (schoolConfig && !schoolConfig._id) {
       console.error('schoolConfig non contiene _id:', schoolConfig);
@@ -25,27 +22,20 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   }, [schoolConfig]);  
   
   const [formData, setFormData] = useState({
-    name: '',
+    nome: '',
     cognome: '',
-    sesso: '',
-    classe: '',
-    sezione: '',
+    gender: '',
+    number: '',
+    section: '',
     note: ''
   });
 
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
-  
-  // Nuovi stati per la gestione delle classi
   const [existingClasses, setExistingClasses] = useState([]);
   const [shouldCreateNewClass, setShouldCreateNewClass] = useState(false);
   const [isCheckingClass, setIsCheckingClass] = useState(false);
   
-  
-  const [currentSchoolYear, setCurrentSchoolYear] = useState(null);
- 
- 
-  // Aggiungi questo useEffect per caricare l'anno scolastico
   const getCurrentSchoolYear = () => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -58,8 +48,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
     }
   };
 
-
-  // Opzioni della scuola (invariato)
   const schoolOptions = useMemo(() => ({
     classi: Array.from(
       { length: schoolConfig?.tipo_istituto === 'primo_grado' ? 3 : 5 }, 
@@ -68,150 +56,150 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
     sezioni: schoolConfig?.sezioni_disponibili.map(s => ({ id: s, name: s })) || []
   }), [schoolConfig]);
 
-  // Carica le classi esistenti quando il modal si apre
   useEffect(() => {
     const fetchClasses = async () => {
-      try {
-        const response = await axios.get('/api/classes', {
-          params: { school: schoolConfig._id }
-        });
-        setExistingClasses(response.data.data || []);
-      } catch (error) {
-        console.error('Errore nel caricamento delle classi:', error);
-        toast.error('Errore nel caricamento delle classi');
-      }
+        try {
+            const currentSchoolYear = getCurrentSchoolYear();
+            const response = await axios.get('/api/classes', {
+                params: { 
+                    school: schoolConfig._id,
+                    schoolYear: currentSchoolYear  // Aggiungiamo questo parametro
+                }
+            });
+            setExistingClasses(response.data.data || []);
+        } catch (error) {
+            console.error('Errore nel caricamento delle classi:', error);
+            toast.error('Errore nel caricamento delle classi');
+        }
     };
 
     if (isOpen && schoolConfig._id) {
-      fetchClasses();
+        fetchClasses();
     }
-  }, [isOpen, schoolConfig._id]);
+}, [isOpen, schoolConfig._id]);
 
-  // Imposta i dati iniziali del form
   useEffect(() => {
     setFormData({
       nome: student?.nome || '',
       cognome: student?.cognome || '',
-      sesso: student?.sesso || '',
-      classe: student?.classe || '',
-      sezione: student?.sezione || '',
+      gender: student?.gender || '',
+      number: student?.number || '',
+      section: student?.section || '',
       note: student?.note || ''
     });
   }, [student]);
 
-  // Controlla se la classe esiste quando cambiano classe o sezione
   useEffect(() => {
     const checkClassExists = async () => {
-      if (!formData.classe || !formData.sezione) return;
+      if (!formData.number || !formData.section) return;
       
       setIsCheckingClass(true);
+      const currentSchoolYear = getCurrentSchoolYear();
+        
       const classExists = existingClasses.some(
-        c => c.numero === formData.classe && c.sezione === formData.sezione
+            c => c.number === parseInt(formData.number) && 
+                 c.section === formData.section.toUpperCase() &&
+                 c.schoolYear === currentSchoolYear  // Aggiungiamo questo controllo
       );
       setShouldCreateNewClass(!classExists);
       setIsCheckingClass(false);
     };
 
     checkClassExists();
-  }, [formData.classe, formData.sezione, existingClasses]);
+  }, [formData.number, formData.section, existingClasses]);
 
-  // Validazione del form
   const validateForm = () => {
     const newErrors = {};
     if (!formData.nome.trim()) newErrors.nome = 'Il nome è obbligatorio';
     if (!formData.cognome.trim()) newErrors.cognome = 'Il cognome è obbligatorio';
-    if (!formData.sesso) newErrors.sesso = 'Il sesso è obbligatorio';
-    if (!formData.classe) newErrors.classe = 'La classe è obbligatoria';
-    if (!formData.sezione) newErrors.sezione = 'La sezione è obbligatoria';
+    if (!formData.gender) newErrors.gender = 'Il genere è obbligatorio';
+    if (!formData.number) newErrors.number = 'La classe è obbligatoria';
+    if (!formData.section) newErrors.section = 'La sezione è obbligatoria';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Gestione cambiamenti nei campi del form
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
     setErrors(prev => ({ ...prev, [name]: undefined }));
   };
 
-  // Gestione del submit
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Log iniziale
-    console.log('=== INIZIO SUBMIT ===');
-    console.log('schoolConfig ricevuto:', schoolConfig);
-
-    if (!validateForm()) {
-      console.log('Validazione form fallita');
-      return;
-    }
+    if (!validateForm()) return;
 
     setIsLoading(true);
     try {
-      // Creiamo prima studentData
-      const studentData = {
-        ...formData,
-        school: schoolConfig._id,
-        annoScolastico: getCurrentSchoolYear()
-      };
-
-      console.log('=== DATI STUDENTE ===');
-      console.log('studentData:', studentData);
-
+      let classId = null;
+      
       if (shouldCreateNewClass) {
-        // Prima di creare la classe, verifichiamo tutti i dati necessari
         const classData = {
-          number: parseInt(formData.classe),
-          section: formData.sezione.toUpperCase(),
+          number: parseInt(formData.number),
+          section: formData.section.toUpperCase(),
           schoolYear: getCurrentSchoolYear(),
           schoolId: schoolConfig._id
         };
 
-        // Log dei dati della classe
-        console.log('=== DATI CLASSE DA CREARE ===');
-        console.log(JSON.stringify(classData, null, 2));
+        // Aggiungiamo log per debug
+        console.log('=== TENTATIVO CREAZIONE CLASSE ===');
+        console.log('Class Data:', classData);
+        console.log('SchoolConfig:', schoolConfig);
 
         const createClass = window.confirm(
-          `La classe ${formData.classe}${formData.sezione} non esiste. Vuoi crearla?`
+          `La classe ${formData.number}${formData.section} non esiste. Vuoi crearla?`
         );
 
         if (createClass) {
           try {
-            // Log prima della chiamata API
-            console.log('=== CHIAMATA API CREAZIONE CLASSE ===');
-            console.log('Dati inviati:', classData);
-
+            // Log della richiesta
+            console.log('Invio richiesta POST a /api/classes con dati:', classData);
+            
             const newClassResponse = await axios.post('/api/classes', classData);
-            
-            console.log('=== RISPOSTA API CLASSE ===');
-            console.log(newClassResponse.data);
-
+            console.log('Risposta creazione classe:', newClassResponse.data);
             if (newClassResponse.data.success) {
-              // Aggiorniamo studentData con l'ID della classe appena creata
-              studentData.classe = newClassResponse.data.data._id;
-              
-    
-            } 
-            
+              classId = newClassResponse.data.data._id;
+            }
           } catch (classError) {
-            console.error('Errore creazione classe:', classError.response?.data);
+            
+            console.error('Dettagli errore creazione classe:', {
+              message: classError.message,
+              response: classError.response?.data,
+              status: classError.response?.status,
+              data: classData
+          });
+            
             toast.error(classError.response?.data?.message || 'Errore durante la creazione della classe');
             setIsLoading(false);
             return;
-            }
-         } else {
+          }
+        } else {
           setIsLoading(false);
           return;
-          }
         }
+      } else {
+        const existingClass = existingClasses.find(
+          c => c.number === parseInt(formData.number) && 
+               c.section === formData.section.toUpperCase()
+        );
+        classId = existingClass?._id;
+      }
 
-      // Invio finale dei dati dello studente
-      console.log('=== INVIO DATI STUDENTE ===');
-      console.log('Dati finali studente:', studentData);
-      
+      const studentData = {
+        nome: formData.nome,
+        cognome: formData.cognome,
+        gender: formData.gender.toUpperCase(),
+        number: parseInt(formData.number),
+        section: formData.section.toUpperCase(),
+        schoolYear: getCurrentSchoolYear(),
+        schoolId: schoolConfig._id,
+        note: formData.note || ''
+      };
+
       const result = await onSubmit(studentData);
+      
       if (result && result.success) {
         toast.success(student ? 'Studente modificato con successo' : 'Studente aggiunto con successo');
         onClose();
@@ -224,7 +212,7 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
     } finally {
       setIsLoading(false);
     }
-};
+  };
 
   if (!isOpen) return null;
 
@@ -246,7 +234,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Nome e Cognome */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
@@ -274,60 +261,58 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
               </div>
             </div>
 
-            {/* Sesso, Classe e Sezione */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sesso *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Genere *</label>
                 <select
-                  name="sesso"
-                  value={formData.sesso}
+                  name="gender"
+                  value={formData.gender}
                   onChange={handleChange}
                   disabled={isLoading}
-                  className={`w-full p-2 border rounded-md ${errors.sesso ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full p-2 border rounded-md ${errors.gender ? 'border-red-500' : 'border-gray-300'}`}
                 >
                   <option value="">Seleziona...</option>
                   <option value="M">Maschio</option>
                   <option value="F">Femmina</option>
                 </select>
-                {errors.sesso && <p className="mt-1 text-sm text-red-500">{errors.sesso}</p>}
+                {errors.gender && <p className="mt-1 text-sm text-red-500">{errors.gender}</p>}
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Classe *</label>
                 <select
-                  name="classe"
-                  value={formData.classe}
+                  name="number"
+                  value={formData.number}
                   onChange={handleChange}
                   disabled={isLoading}
-                  className={`w-full p-2 border rounded-md ${errors.classe ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full p-2 border rounded-md ${errors.number ? 'border-red-500' : 'border-gray-300'}`}
                 >
                   <option value="">Seleziona...</option>
                   {schoolOptions.classi.map(option => (
                     <option key={option.id} value={option.id}>{option.name}</option>
                   ))}
                 </select>
-                {errors.classe && <p className="mt-1 text-sm text-red-500">{errors.classe}</p>}
+                {errors.number && <p className="mt-1 text-sm text-red-500">{errors.number}</p>}
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Sezione *</label>
                 <select
-                  name="sezione"
-                  value={formData.sezione}
+                  name="section"
+                  value={formData.section}
                   onChange={handleChange}
                   disabled={isLoading}
-                  className={`w-full p-2 border rounded-md ${errors.sezione ? 'border-red-500' : 'border-gray-300'}`}
+                  className={`w-full p-2 border rounded-md ${errors.section ? 'border-red-500' : 'border-gray-300'}`}
                 >
                   <option value="">Seleziona...</option>
                   {schoolOptions.sezioni.map(option => (
                     <option key={option.id} value={option.id}>{option.name}</option>
                   ))}
                 </select>
-                {errors.sezione && <p className="mt-1 text-sm text-red-500">{errors.sezione}</p>}
+                {errors.section && <p className="mt-1 text-sm text-red-500">{errors.section}</p>}
               </div>
             </div>
 
-            {/* Note */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Note (opzionale)</label>
               <textarea
@@ -340,7 +325,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
               />
             </div>
 
-            {/* Pulsanti */}
             <div className="flex justify-end space-x-3 pt-4">
               <button
                 type="button"

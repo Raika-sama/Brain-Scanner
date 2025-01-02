@@ -11,26 +11,28 @@ const studentSchema = new mongoose.Schema({
         required: [true, 'Il cognome è obbligatorio'],
         trim: true
     },
-    sesso: {
+    gender: {                     // Cambiato da 'sesso' a 'gender'
         type: String,
         enum: {
             values: ['M', 'F'],
-            message: '{VALUE} non è un valore valido per il sesso'
+            message: '{VALUE} non è un valore valido per il genere'
         },
-        required: true
+        required: true,
+        uppercase: true
     },
-    classe: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Class',
-        required: true
+    number: {                     // Cambiato da 'classe' a 'number'
+        type: Number,
+        required: true,
+        min: [1, 'La classe deve essere maggiore di 0'],
+        max: [5, 'La classe non può essere maggiore di 5']
     },
-    sezione: {                    // Aggiunto campo sezione
+    section: {                    // Cambiato da 'sezione' a 'section'
         type: String,
         required: true,
         uppercase: true,
         trim: true
     },
-    annoScolastico: {            // Aggiunto campo annoScolastico
+    schoolYear: {                 // Cambiato da 'annoScolastico' a 'schoolYear'
         type: String,
         required: true,
         validate: {
@@ -40,7 +42,7 @@ const studentSchema = new mongoose.Schema({
             message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
         }
     },
-    school: {
+    schoolId: {                   // Cambiato da 'school' a 'schoolId'
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
         required: [true, 'La scuola è obbligatoria']
@@ -58,8 +60,21 @@ const studentSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Indici
-studentSchema.index({ school: 1, classe: 1 });
+// Indice composito unico
+studentSchema.index({ 
+    schoolId: 1, 
+    number: 1, 
+    section: 1, 
+    schoolYear: 1,
+    nome: 1,
+    cognome: 1 
+}, { 
+    unique: true,
+    name: "student_unique_composite_index"
+});
+
+// Indici aggiuntivi per performance
+studentSchema.index({ schoolId: 1, number: 1, section: 1 });
 studentSchema.index({ teachers: 1 });
 
 // Methods
@@ -77,14 +92,9 @@ studentSchema.methods.removeTeacher = function(teacherId) {
 
 // Middleware
 studentSchema.pre('save', function(next) {
-    if (this.isNew && this.teachers.length === 0) {
-        // Se è un nuovo studente e non ha teachers, aggiungi l'utente corrente
-        // Questo andrà gestito nel controller usando req.user._id
-        next(new Error('Almeno un insegnante deve essere associato'));
-    }
-    // Converti sesso in maiuscolo
-    if (this.sesso) {
-        this.sesso = this.sesso.toUpperCase();
+    // Converti gender in maiuscolo
+    if (this.gender) {
+        this.gender = this.gender.toUpperCase();
     }
     next();
 });
