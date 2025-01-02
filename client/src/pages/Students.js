@@ -1,14 +1,16 @@
 // client/src/pages/Students.js
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
     Box, 
     Paper, 
     Typography, 
     Button, 
     Container,
-    Alert
+    Alert,
+    CircularProgress
 } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
+import { toast } from 'react-hot-toast';
 import StudentsTab from '../components/tabs/StudentsTab';
 import StudentModal from '../components/StudentModal';
 import { useApp } from '../context/AppContext';
@@ -17,13 +19,17 @@ const Students = () => {
     const { state, fetchStudents, addStudent } = useApp();
     const [showModal, setShowModal] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
 
+    // Memo per i dati dell'utente
     const userData = useMemo(() => {
         if (!state.user) return null;
         const user = state.user?.user || state.user;
         return user;
     }, [state.user]);
 
+    // Memo per la configurazione della scuola
     const schoolConfig = useMemo(() => {
         if (!userData?.school?._id) return null;
         return {
@@ -33,13 +39,30 @@ const Students = () => {
         };
     }, [userData?.school]);
 
-    // Usiamo useEffect per caricare gli studenti quando il componente viene montato
-    React.useEffect(() => {
-        if (userData?.school?._id) {
-            fetchStudents();
-        }
-    }, [userData?.school?._id, fetchStudents]);
+    // Effect per caricare gli studenti
+    useEffect(() => {
+        const loadStudents = async () => {
+            if (!userData?.school?._id) {
+                setIsLoading(false);
+                return;
+            }
 
+            try {
+                setError(null);
+                setIsLoading(true);
+                await fetchStudents();
+            } catch (err) {
+                setError(err.message || 'Errore nel caricamento degli studenti');
+                toast.error('Errore nel caricamento degli studenti');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadStudents();
+    }, [userData?.school?._id]); // Rimuovo fetchStudents dalle dipendenze per evitare loop
+
+    // Gestione apertura modale
     const handleOpenModal = () => {
         if (!userData?._id) {
             toast.error('Devi essere autenticato per aggiungere uno studente');
@@ -52,9 +75,19 @@ const Students = () => {
         setShowModal(true);
     };
 
+    // Gestione chiusura modale
+    const handleCloseModal = () => {
+        setShowModal(false);
+        setSelectedStudent(null);
+    };
+
+    // Gestione submit del form studente
     const handleSubmit = async (studentData) => {
         try {
-            // Prepara i dati dello studente includendo schoolId e mainTeacher
+            if (!schoolConfig?._id || !userData?._id) {
+                throw new Error('Configurazione non valida');
+            }
+
             const studentPayload = {
                 ...studentData,
                 schoolId: schoolConfig._id,
@@ -62,27 +95,46 @@ const Students = () => {
                 isActive: true
             };
 
-            // Usa addStudent dal context invece di studentService
             const result = await addStudent(studentPayload);
             
             if (result.success) {
-                setShowModal(false);
+                toast.success('Studente aggiunto con successo');
+                handleCloseModal();
                 return result;
             }
-            return result;
+
+            throw new Error(result.message || 'Errore durante l\'aggiunta dello studente');
         } catch (error) {
+            const errorMessage = error.message || 'Errore durante l\'aggiunta dello studente';
+            toast.error(errorMessage);
             console.error('Errore durante l\'aggiunta dello studente:', error);
             return { 
                 success: false, 
-                message: error.message || 'Errore durante l\'aggiunta dello studente' 
+                message: errorMessage 
             };
         }
     };
 
-    // Usa gli studenti direttamente dallo state del context
+    // Filtro studenti attivi
     const filteredStudents = useMemo(() => {
-        return state.students.filter(student => student.isActive);
+        return (state.students || []).filter(student => student?.isActive);
     }, [state.students]);
+
+    // Gestione modifica studente
+    const handleEditStudent = (student) => {
+        setSelectedStudent(student);
+        setShowModal(true);
+    };
+
+    if (error) {
+        return (
+            <Container maxWidth="xl">
+                <Alert severity="error" sx={{ mt: 4 }}>
+                    {error}
+                </Alert>
+            </Container>
+        );
+    }
 
     return (
         <Container maxWidth="xl">
@@ -104,7 +156,7 @@ const Students = () => {
                         variant="contained"
                         startIcon={<AddIcon />}
                         onClick={handleOpenModal}
-                        disabled={!schoolConfig}
+                        disabled={!schoolConfig || isLoading}
                     >
                         Aggiungi Studente
                     </Button>
@@ -119,10 +171,7 @@ const Students = () => {
                 {showModal && (
                     <StudentModal
                         isOpen={showModal}
-                        onClose={() => {
-                            setShowModal(false);
-                            setSelectedStudent(null);
-                        }}
+                        onClose={handleCloseModal}
                         onSubmit={handleSubmit}
                         student={selectedStudent}
                         schoolConfig={schoolConfig}
@@ -131,15 +180,18 @@ const Students = () => {
                 )}
 
                 <Paper sx={{ p: 3 }}>
-                    <StudentsTab 
-                        students={filteredStudents}
-                        loading={state.loading}
-                        onEditStudent={(student) => {
-                            setSelectedStudent(student);
-                            setShowModal(true);
-                        }}
-                        showActions={true}
-                    />
+                    {isLoading ? (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : (
+                        <StudentsTab 
+                            students={filteredStudents}
+                            loading={isLoading}
+                            onEditStudent={handleEditStudent}
+                            showActions={true}
+                        />
+                    )}
                 </Paper>
             </Box>
         </Container>
