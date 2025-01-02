@@ -9,39 +9,48 @@ import Classes from './pages/Classes';
 import SchoolPage from './pages/SchoolPage';
 import Students from './pages/Students';
 import { AppProvider } from './context/AppContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import PlaceholderPage from './pages/placeholder'; // Aggiungi questo import
 
 const App = () => {
-  const isAuthenticated = () => {
-    const token = localStorage.getItem('token');
-    return !!token;
-  };
-
-  const ProtectedRoute = ({ children }) => {
-    if (!isAuthenticated()) {
-      return <Navigate to="/login" replace />;
-    }
-    return children;
-  };
-
   return (
-    <AppProvider>  {/* Aggiungiamo solo questo wrapper */}
+    <AppProvider>
       <Router>
         <Routes>
-          <Route path="/login" element={
-            isAuthenticated() ? <Navigate to="/dashboard" replace /> : <LoginPage />
-          } />
+          {/* Rotte pubbliche */}
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<PlaceholderPage pageName="Recupero Password" />} />
+          <Route path="/reset-password/:token" element={<PlaceholderPage pageName="Reset Password" />} />
 
-          <Route path="/" element={
-            <ProtectedRoute>
-              <MainLayout />
-            </ProtectedRoute>
-          }>
+          {/* Rotte protette */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <MainLayout />
+              </ProtectedRoute>
+            }
+          >
+            {/* Dashboard */}
             <Route path="dashboard" element={<Dashboard />} />
+            
+            {/* Gestione scuola */}
             <Route path="schools" element={<SchoolPage />} />
             <Route path="classes" element={<Classes />} />
             <Route path="classes/:classId" element={<ClassDetail />} />
             <Route path="students" element={<Students />} />
+
+            {/* Nuove rotte con placeholder */}
+            <Route path="profile" element={<PlaceholderPage pageName="Profilo Utente" />} />
+            <Route path="settings" element={<PlaceholderPage pageName="Impostazioni" />} />
+            <Route path="tests" element={<PlaceholderPage pageName="Test" />} />
+            <Route path="tests/create" element={<PlaceholderPage pageName="Crea Test" />} />
+            <Route path="tests/:testId" element={<PlaceholderPage pageName="Dettaglio Test" />} />
+            <Route path="results" element={<PlaceholderPage pageName="Risultati" />} />
+
+            {/* Redirect e 404 */}
             <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="*" element={<PlaceholderPage pageName="Pagina non trovata - 404" />} />
           </Route>
         </Routes>
       </Router>

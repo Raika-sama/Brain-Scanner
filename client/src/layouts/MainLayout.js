@@ -6,6 +6,7 @@ import { Menu, User, LogOut, Settings, Bell } from 'lucide-react';
 import axios from 'axios';
 import Sidebar from '../components/Sidebar';
 import { ErrorBoundary } from 'react-error-boundary';
+import { useAuth } from '../hooks/useAuth';
 
 // Componente Loading elegante
 const LoadingSpinner = () => (
@@ -22,60 +23,15 @@ const LoadingSpinner = () => (
 const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: userData, logout, isLoading } = useAuth(); // Usiamo useAuth invece dello state locale
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [userData, setUserData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
 
-  // Manteniamo gli interceptor JWT esistenti
-  useEffect(() => {
-    axios.interceptors.request.use(
-      (config) => {
-        const token = localStorage.getItem('token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => Promise.reject(error)
-    );
 
-    axios.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('userData');
-          navigate('/login');
-        }
-        return Promise.reject(error);
-      }
-    );
-  }, [navigate]);
-
-  // Verifica autenticazione
-  useEffect(() => {
-    const verifyAuth = async () => {
-      try {
-        const response = await axios.get('/api/users/me');
-        setUserData(response.data.user || response.data);
-      } catch (error) {
-        console.error('Auth verification failed:', error);
-        localStorage.removeItem('token');
-        localStorage.removeItem('userData');
-        navigate('/login');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    verifyAuth();
-  }, [navigate]);
+  
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userData');
-    navigate('/login');
+    logout();
   };
 
   if (isLoading) {

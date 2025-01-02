@@ -1,22 +1,46 @@
 // src/hooks/useAuth.js
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import axios from '../utils/axios';
 
 export const useAuth = () => {
-  const { dispatch } = useApp();
+  const { state, dispatch } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  // Verifica automatica dello stato di autenticazione all'avvio
+  useEffect(() => {
+    const verifyAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        setIsLoading(true);
+        try {
+          const response = await axios.get('/api/users/me');
+          dispatch({ type: 'SET_USER', payload: response.data.user });
+        } catch (err) {
+          console.error('Verifica auth fallita:', err);
+          localStorage.removeItem('token');
+          localStorage.removeItem('userData');
+          localStorage.removeItem('rememberMe');
+          dispatch({ type: 'SET_USER', payload: null });
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    verifyAuth();
+  }, [dispatch]);
 
   const login = useCallback(async (email, password, rememberMe) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      // Login request
       const loginResponse = await axios.post('/api/auth/login', {
         email,
         password
@@ -24,18 +48,19 @@ export const useAuth = () => {
 
       const { token, user } = loginResponse.data;
 
-      // Salva token e user data
       localStorage.setItem('token', token);
       localStorage.setItem('userData', JSON.stringify(user));
       if (rememberMe) {
         localStorage.setItem('rememberMe', 'true');
       }
 
-      // Aggiorna context
       dispatch({ type: 'SET_USER', payload: user });
       
       toast.success('Login effettuato con successo!');
-      navigate('/dashboard');
+      
+      // Reindirizza alla pagina precedente se disponibile
+      const from = location.state?.from?.pathname || '/dashboard';
+      navigate(from, { replace: true });
       
       return user;
 
@@ -47,7 +72,7 @@ export const useAuth = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [dispatch, navigate]);
+  }, [dispatch, navigate, location]);
 
   const register = useCallback(async (userData) => {
     setIsLoading(true);
@@ -82,14 +107,22 @@ export const useAuth = () => {
     localStorage.removeItem('userData');
     localStorage.removeItem('rememberMe');
     dispatch({ type: 'SET_USER', payload: null });
+    toast.success('Logout effettuato con successo');
     navigate('/login');
   }, [dispatch, navigate]);
 
+  // Funzione per verificare se l'utente è autenticato
+  const isAuthenticated = useCallback(() => {
+    return !!state.user;
+  }, [state.user]);
+
   return {
+    user: state.user,
     login,
     register,
     logout,
     isLoading,
-    error
+    error,
+    isAuthenticated
   };
 };

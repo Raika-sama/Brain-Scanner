@@ -1,159 +1,169 @@
-Documentazione Sistema di Autenticazione - Brain Scanner
-1. Panoramica del Sistema
-Il sistema di autenticazione di Brain Scanner è basato su JSON Web Token (JWT) e implementa un'architettura stateless per la gestione delle sessioni utente.
+# Documentazione Sistema di Autenticazione - Brain Scanner
 
-1.1 Componenti Principali
-Frontend: React (client)
-Backend: Node.js/Express
-Token Storage: localStorage del browser
-Middleware di Autenticazione: JWT-based
-Database: MongoDB Atlas
-2. Flusso di Autenticazione
-2.1 Login/Registrazione
-JavaScript
-// authRoutes.js
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  // Verifica credenziali
-  const token = jwt.sign({
-    userId: user._id,
-    email: user.email,
-    ruolo: user.ruolo
-  }, process.env.JWT_SECRET, { expiresIn: '24h' });
-});
-2.2 Gestione Token Frontend
-JavaScript
-// MainLayout.js
-axios.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-2.3 Protezione Route
-JavaScript
-// authMiddleware.js
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.header('Authorization');
-  // Verifica presenza e formato del token
-  const token = authHeader.split(' ')[1];
-  // Verifica validità token
-  const decoded = jwt.verify(token, secretKey);
-  req.user = decoded;
-  next();
-};
-3. Configurazione
-3.1 Variabili d'Ambiente Required
-env
-JWT_SECRET=your-secret-key
-MONGODB_URI=your-mongodb-connection-string
-PORT=5000
-3.2 CORS Configuration
-JavaScript
-const corsOptions = {
-  origin: ['http://localhost:3000', 'http://localhost:3001'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-4. Sicurezza Implementata
-4.1 Password Hashing
-Utilizzo di crypto.scrypt per l'hashing delle password
-Salt univoco per ogni utente
-Confronto sicuro tramite crypto.timingSafeEqual
-4.2 Rate Limiting
-JavaScript
-const loginLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minuti
-    max: 5, // limite di 5 tentativi
-});
-4.3 Token Security
-Durata token: 24 ore
-Verifica signature con JWT_SECRET
-Bearer scheme obbligatorio
-Validazione payload completa
-5. API Endpoints Protetti
-5.1 Formato Richieste
-HTTP
-GET /api/protected-route
-Authorization: Bearer <token>
-5.2 Errori Comuni
-JavaScript
-{
-  401: 'Token non valido o scaduto',
-  403: 'Permessi insufficienti',
-  429: 'Troppi tentativi di login'
-}
-6. Testing e Debug
-6.1 Verifica Token
-JavaScript
-// Debug endpoint
-router.get('/debug-user', authMiddleware, async (req, res) => {
-  res.json({
-    success: true,
-    user: user,
-    tokenInfo: req.user
+## 1. Panoramica del Sistema
+Il sistema di autenticazione di Brain Scanner utilizza JWT (JSON Web Token) con una gestione centralizzata attraverso custom hooks React.
+
+### 1.1 Componenti Principali
+- **Frontend**: 
+  - React (client)
+  - useAuth hook personalizzato
+  - Protected Routes
+  - Context API per stato globale
+- **Backend**: Node.js/Express
+- **Storage**: localStorage del browser
+- **Middleware**: JWT-based
+- **Database**: MongoDB Atlas
+
+## 2. Implementazione Frontend
+
+### 2.1 Hook useAuth
+```javascript
+// src/hooks/useAuth.js
+export const useAuth = () => {
+  const { dispatch } = useApp();
+  const navigate = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const login = useCallback(async (email, password, rememberMe) => {
+    // Implementazione login con gestione token e stato
   });
-});
-6.2 Logging
-JavaScript
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
-  next();
-});
-7. Best Practices Implementate
-7.1 Frontend
-Token stored in localStorage
-Automatic token injection in requests
-Token refresh handling
-Logout cleanup
-7.2 Backend
-Environment variables validation
-Error handling middleware
-Secure password storage
-Rate limiting
-CORS configuration
-8. Flow di Sviluppo
-8.1 Aggiunta Nuova Route Protetta
-JavaScript
-router.get('/protected', authMiddleware, async (req, res) => {
-  // Route implementation
-});
-8.2 Gestione Ruoli
-JavaScript
-const checkRole = (roles) => (req, res, next) => {
-  if (!roles.includes(req.user.ruolo)) {
-    return res.status(403).json({
-      success: false,
-      message: 'Permesso negato'
-    });
-  }
-  next();
+
+  const register = useCallback(async (userData) => {
+    // Implementazione registrazione
+  });
+
+  const logout = useCallback(() => {
+    // Pulizia token e stato
+  });
+
+  return { login, register, logout, isLoading, error };
 };
-9. Troubleshooting
-9.1 Problemi Comuni
-Token scaduto
-Header Authorization mancante
-Token malformato
-CORS errors
-9.2 Debug Steps
-Verifica presenza token in localStorage
-Controlla formato Authorization header
-Verifica scadenza token
-Controlla logs server
-10. Manutenzione
-10.1 Monitoraggio
-Log errori di autenticazione
-Monitoraggio tentativi di login falliti
-Tracking sessioni attive
-10.2 Updates
-Aggiornamento regolare dipendenze
-Review sicurezza periodica
-Backup configurazioni
-11. Note per il Team
-Non modificare JWT_SECRET in production
-Mantenere aggiornate le whitelist CORS
-Implementare monitoring per failed attempts
-Seguire le best practices per password storage
-Documentare qualsiasi modifica al sistema di auth
+2.2 Protected Route
+JavaScript
+// src/components/ProtectedRoute.js
+export const ProtectedRoute = ({ children }) => {
+  const { user, isLoading } = useAuth();
+  const location = useLocation();
+
+  if (isLoading) return <LoadingSpinner />;
+  
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+};
+2.3 App Context
+JavaScript
+// src/context/AppContext.js
+const initialState = {
+  user: JSON.parse(localStorage.getItem('userData')) || null,
+  loading: false,
+  error: null
+};
+
+const appReducer = (state, action) => {
+  switch (action.type) {
+    case 'SET_USER':
+      return { ...state, user: action.payload };
+    // Altri cases...
+  }
+};
+2.4 Struttura Route
+JavaScript
+// src/App.js
+<Routes>
+  {/* Route pubbliche */}
+  <Route path="/login" element={<LoginPage />} />
+  <Route path="/forgot-password" element={<PlaceholderPage pageName="Recupero Password" />} />
+
+  {/* Route protette */}
+  <Route path="/" element={
+    <ProtectedRoute>
+      <MainLayout />
+    </ProtectedRoute>
+  }>
+    <Route path="dashboard" element={<Dashboard />} />
+    {/* Altre route protette */}
+  </Route>
+</Routes>
+3. Gestione Token
+3.1 Axios Interceptors
+JavaScript
+// src/utils/axios.js
+axios.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('userData');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+4. Sicurezza Implementata
+4.1 Frontend
+Gestione token in localStorage
+Protezione route con ProtectedRoute
+Gestione errori centralizzata
+Loading states per feedback utente
+Toast notifications per feedback
+Logout automatico su token invalido
+4.2 Integrazione con Backend
+Header Authorization Bearer
+Gestione errori 401
+Reindirizzamento automatico al login
+Refresh token non implementato (TODO)
+5. Funzionalità Disponibili
+5.1 Autenticazione
+Login con email/password
+Registrazione nuovo utente
+Logout con pulizia stato
+Remember me option
+Protezione route
+5.2 Gestione Stati
+Loading states
+Error handling
+User context
+Toast notifications
+6. TODO List
+Implementare password recovery
+Aggiungere refresh token
+Implementare remember me lato server
+Aggiungere rate limiting frontend
+Implementare session tracking
+Aggiungere two-factor authentication
+Implementare sistema di testing completo
+   - Unit test per hooks
+   - Test componenti React
+   - Test di integrazione
+   - E2E testing
+
+7. Best Practices Implementate
+Gestione centralizzata stato auth
+Protected routes
+Error boundaries
+Loading states
+Toast notifications
+Clean logout
+Axios interceptors
+Context API per stato globale
+8. Note per Sviluppatori
+Usare sempre ProtectedRoute per nuove route private
+Gestire sempre loading states
+Utilizzare toast per feedback utente
+Implementare error handling
+Mantenere consistenza localStorage/context

@@ -1,8 +1,11 @@
+// src/components/Registration.js
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { useAuth } from '../hooks/useAuth';
+import { Loader2 } from 'lucide-react';
 
-function Registration() {
-  const navigate = useNavigate();
+const Registration = () => {
+  const { register, isLoading, error: authError } = useAuth();
   const [formData, setFormData] = useState({
     nome: '',
     cognome: '',
@@ -12,7 +15,6 @@ function Registration() {
     ruolo: 'studente'
   });
   const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -22,139 +24,130 @@ function Registration() {
     }));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError(null);
-    setIsLoading(true);
 
-    // Validazione password
     if (formData.password !== formData.confirmPassword) {
-      setError('Le password non corrispondono!');
-      setIsLoading(false);
+      setError('Le password non corrispondono');
       return;
     }
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          nome: formData.nome,
-          cognome: formData.cognome,
-          email: formData.email,
-          password: formData.password,
-          ruolo: formData.ruolo
-        })
+      await register({
+        nome: formData.nome,
+        cognome: formData.cognome,
+        email: formData.email,
+        password: formData.password,
+        ruolo: formData.ruolo
       });
-
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        // Salva il token
-        localStorage.setItem('token', data.token);
-        // Salva i dati utente
-        localStorage.setItem('userData', JSON.stringify(data.user));
-        navigate('/dashboard');
-      } else {
-        setError(data.message || 'Errore durante la registrazione');
-      }
-    } catch (error) {
-      console.error('Errore:', error);
-      setError('Errore di connessione al server');
-    } finally {
-      setIsLoading(false);
+    } catch (err) {
+      setError(err.message || authError);
     }
   };
 
+  const inputFields = [
+    { name: 'nome', label: 'Nome', type: 'text' },
+    { name: 'cognome', label: 'Cognome', type: 'text' },
+    { name: 'email', label: 'Email', type: 'email' },
+    { name: 'password', label: 'Password', type: 'password' },
+    { name: 'confirmPassword', label: 'Conferma Password', type: 'password' }
+  ];
+
   return (
-    <form onSubmit={handleSubmit} className="max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow">
-      <h2 className="text-2xl font-bold mb-6">Registrazione</h2>
-      
-      {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
-        </div>
+    <motion.form
+      onSubmit={handleSubmit}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
+      {(error || authError) && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-lg bg-red-50 border border-red-200"
+        >
+          <p className="text-sm text-red-600">{error || authError}</p>
+        </motion.div>
       )}
 
-      {['nome', 'cognome'].map((field) => (
-        <div className="mb-4" key={field}>
-          <label htmlFor={field} className="block text-gray-700 mb-2">
-            {field.charAt(0).toUpperCase() + field.slice(1)}:
-          </label>
-          <input
-            type="text"
-            id={field}
-            name={field}
-            value={formData[field]}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-            className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-        </div>
-      ))}
+      <div className="space-y-4">
+        {inputFields.map((field) => (
+          <div key={field.name}>
+            <label 
+              htmlFor={field.name} 
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              {field.label}
+            </label>
+            <motion.input
+              whileFocus={{ scale: 1.01 }}
+              type={field.type}
+              id={field.name}
+              name={field.name}
+              value={formData[field.name]}
+              onChange={handleChange}
+              required
+              disabled={isLoading}
+              className="w-full px-4 py-2 rounded-lg border border-gray-300 
+                focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
+                transition-all duration-200"
+              placeholder={field.label === 'Password' || field.label === 'Conferma Password' 
+                ? '••••••••' 
+                : `Inserisci ${field.label.toLowerCase()}`}
+            />
+          </div>
+        ))}
 
-      <div className="mb-4">
-        <label htmlFor="email" className="block text-gray-700 mb-2">Email:</label>
-        <input
-          type="email"
-          id="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          required
-          disabled={isLoading}
-          className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
+        <div>
+          <label 
+            htmlFor="ruolo" 
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Ruolo
+          </label>
+          <motion.select
+            whileFocus={{ scale: 1.01 }}
+            id="ruolo"
+            name="ruolo"
+            value={formData.ruolo}
+            onChange={handleChange}
+            disabled={isLoading}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 
+              focus:border-blue-500 focus:ring-2 focus:ring-blue-200 
+              transition-all duration-200 bg-white"
+          >
+            <option value="studente">Studente</option>
+            <option value="insegnante">Insegnante</option>
+            <option value="amministratore">Amministratore</option>
+          </motion.select>
+        </div>
       </div>
 
-      {['password', 'confirmPassword'].map((field) => (
-        <div className="mb-4" key={field}>
-          <label htmlFor={field} className="block text-gray-700 mb-2">
-            {field === 'password' ? 'Password:' : 'Conferma Password:'}
-          </label>
-          <input
-            type="password"
-            id={field}
-            name={field}
-            value={formData[field]}
-            onChange={handleChange}
-            required
-            disabled={isLoading}
-            className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-        </div>
-      ))}
-
-      <div className="mb-6">
-        <label htmlFor="ruolo" className="block text-gray-700 mb-2">Ruolo:</label>
-        <select 
-          id="ruolo"
-          name="ruolo"
-          value={formData.ruolo}
-          onChange={handleChange}
-          disabled={isLoading}
-          className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option value="amministratore">Amministratore</option>
-          <option value="studente">Studente</option>
-          <option value="insegnante">Insegnante</option>
-        </select>
-      </div>
-
-      <button 
+      <motion.button
         type="submit"
         disabled={isLoading}
-        className={`w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 ${
-          isLoading ? 'opacity-50 cursor-not-allowed' : ''
-        }`}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        className={`w-full flex items-center justify-center py-2.5 px-4 
+          rounded-lg text-white font-medium transition-all duration-200 
+          ${isLoading 
+            ? 'bg-blue-400 cursor-not-allowed' 
+            : 'bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-200'
+          }`}
       >
-        {isLoading ? 'Registrazione in corso...' : 'Registrati'}
-      </button>
-    </form>
+        {isLoading ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Registrazione in corso...
+          </>
+        ) : (
+          'Registrati'
+        )}
+      </motion.button>
+    </motion.form>
   );
-}
+};
 
 export default Registration;

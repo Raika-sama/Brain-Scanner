@@ -1,176 +1,133 @@
+// src/components/Login.js
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useApp } from '../context/AppContext';
-import { API_HEADERS } from '../config';
-import { toast } from 'react-hot-toast';
+import { motion } from 'framer-motion';
+import { useAuth } from '../hooks/useAuth';
+import { Loader2 } from 'lucide-react';
 
-function Login() {
-  const navigate = useNavigate();
-  const { dispatch } = useApp();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
+const Login = () => {
+  const { login, isLoading, error: authError } = useAuth();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    rememberMe: false
+  });
   const [error, setError] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
+  const handleChange = (e) => {
+    const { name, value, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: name === 'rememberMe' ? checked : value
+    }));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setError(null);
-    setIsLoading(true);
-
+    
     try {
-      // Prima chiamata: login
-      const loginResponse = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: API_HEADERS,
-        body: JSON.stringify({ email, password })
-      });
-
-      const loginData = await loginResponse.json();
-      console.log('Login response:', loginData);
-
-      if (!loginResponse.ok) {
-        throw new Error(loginData.message || 'Errore durante il login');
-      }
-
-      if (loginData.token) {
-        // Seconda chiamata: ottenere i dati utente completi
-        const userResponse = await fetch('/api/users/me', {
-          headers: {
-            ...API_HEADERS,
-            'Authorization': `Bearer ${loginData.token}`
-          }
-        });
-
-        if (!userResponse.ok) {
-          throw new Error('Errore nel recupero dei dati utente');
-        }
-
-        const userData = await userResponse.json();
-        console.log('User data from server:', userData);
-
-        // Salva tutto nel localStorage
-        localStorage.setItem('token', loginData.token);
-        localStorage.setItem('userData', JSON.stringify(userData));
-        if (rememberMe) {
-          localStorage.setItem('rememberMe', 'true');
-        }
-
-        // Aggiorna lo state dell'applicazione
-        dispatch({ 
-          type: 'SET_USER', 
-          payload: userData 
-        });
-
-        // Notifica successo e redirect
-        toast.success('Login effettuato con successo!');
-        navigate('/dashboard');
-      }
-    } catch (error) {
-      console.error('Errore durante il login:', error);
-      setError(error.message || 'Errore durante il login');
-      toast.error(error.message || 'Errore durante il login');
-    } finally {
-      setIsLoading(false);
+      await login(formData.email, formData.password, formData.rememberMe);
+    } catch (err) {
+      setError(err.message || authError);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <motion.form
+      onSubmit={handleSubmit}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
+      {(error || authError) && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-lg bg-red-50 border border-red-200"
+        >
+          <p className="text-sm text-red-600">{error || authError}</p>
+        </motion.div>
+      )}
+
+      <div className="space-y-4">
         <div>
-          <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-            Accedi al tuo account
-          </h2>
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            Email
+          </label>
+          <motion.input
+            whileFocus={{ scale: 1.01 }}
+            type="email"
+            id="email"
+            name="email"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            disabled={isLoading}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+            placeholder="nome@esempio.com"
+          />
         </div>
-        
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="rounded-md bg-red-50 p-4">
-              <div className="flex">
-                <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">
-                    {error}
-                  </h3>
-                </div>
-              </div>
-            </div>
-          )}
 
-          <div className="rounded-md shadow-sm -space-y-px">
-            <div>
-              <label htmlFor="email" className="sr-only">
-                Indirizzo Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Indirizzo Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-            <div>
-              <label htmlFor="password" className="sr-only">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                disabled={isLoading}
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Ricordami
-              </label>
-            </div>
-          </div>
-
-          <div>
-            <button
-              type="submit"
-              disabled={isLoading}
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
-                isLoading ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-            >
-              {isLoading ? (
-                <span className="absolute left-0 inset-y-0 flex items-center pl-3">
-                  {/* Spinner se necessario */}
-                </span>
-              ) : null}
-              {isLoading ? 'Accesso in corso...' : 'Accedi'}
-            </button>
-          </div>
-        </form>
+        <div>
+          <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            Password
+          </label>
+          <motion.input
+            whileFocus={{ scale: 1.01 }}
+            type="password"
+            id="password"
+            name="password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+            disabled={isLoading}
+            className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all duration-200"
+            placeholder="••••••••"
+          />
+        </div>
       </div>
-    </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center">
+          <input
+            type="checkbox"
+            id="rememberMe"
+            name="rememberMe"
+            checked={formData.rememberMe}
+            onChange={handleChange}
+            disabled={isLoading}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 transition duration-150 ease-in-out"
+          />
+          <label htmlFor="rememberMe" className="ml-2 block text-sm text-gray-700">
+            Ricordami
+          </label>
+        </div>
+      </div>
+
+      <motion.button
+        type="submit"
+        disabled={isLoading}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        className={`w-full flex items-center justify-center py-2.5 px-4 rounded-lg text-white 
+          font-medium transition-all duration-200 ${
+            isLoading 
+              ? 'bg-blue-400 cursor-not-allowed' 
+              : 'bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-200'
+          }`}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Accesso in corso...
+          </>
+        ) : (
+          'Accedi'
+        )}
+      </motion.button>
+    </motion.form>
   );
-}
+};
 
 export default Login;

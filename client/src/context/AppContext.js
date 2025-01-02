@@ -56,6 +56,32 @@ export const selectors = {
 // Reducer
 const appReducer = (state, action) => {
   switch (action.type) {
+    case 'AUTH_START':
+      return {
+        ...state,
+        loading: true,
+        error: null
+      };
+    case 'AUTH_SUCCESS':
+      return {
+        ...state,
+        user: action.payload,
+        loading: false,
+        error: null
+      };
+    case 'AUTH_ERROR':
+      return {
+        ...state,
+        loading: false,
+        error: action.payload
+      };
+    case 'LOGOUT':
+      return {
+        ...state,
+        user: null,
+        
+      };
+    
     case 'SET_USER':
       return {
         ...state,
