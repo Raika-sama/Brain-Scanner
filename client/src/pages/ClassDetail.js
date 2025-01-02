@@ -20,6 +20,9 @@ import { useApp } from '../context/AppContext';
 import StudentsTab from '../components/tabs/StudentsTab';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import AlertMessage from '../components/ui/AlertMessage';
+import AnalysisTab from '../components/tabs/AnalysisTab';
+import MaterialsTab from '../components/tabs/MaterialsTab';
+
 
 // Componente TabPanel per gestire il contenuto delle tabs
 const TabPanel = ({ children, value, index, ...props }) => (
@@ -136,29 +139,16 @@ const ClassDetails = () => {
             <StudentsTab classData={classData} />
           </TabPanel>
 
+
           <TabPanel value={currentTab} index={1}>
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-                Analisi dei Test
-              </Typography>
-              {/* Contenuto per la sezione Analisi */}
-              <Typography variant="body1">
-                Qui verranno visualizzati i risultati dei test specifici della classe
-              </Typography>
-            </Box>
+            <AnalysisTab classData={classData} />
           </TabPanel>
 
           <TabPanel value={currentTab} index={2}>
-            <Box sx={{ p: 2 }}>
-              <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
-                Materiali Didattici
-              </Typography>
-              {/* Contenuto per la sezione Materiali */}
-              <Typography variant="body1">
-                Qui verranno gestiti i materiali e i test della classe
-              </Typography>
-            </Box>
+            <MaterialsTab classData={classData} />
           </TabPanel>
+
+          
         </CardContent>
       </Card>
     </Box>
