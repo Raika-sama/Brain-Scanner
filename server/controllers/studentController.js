@@ -4,6 +4,8 @@ const Class = require('../models/Class');
 const mongoose = require('mongoose');
 
 const studentController = {
+    
+    
     // GET - Recupera tutti gli studenti con filtri
     getStudents: async (req, res) => {
         try {
@@ -445,9 +447,33 @@ const studentController = {
         } finally {
             session.endSession();
         }
+    },
+
+    getSchoolStudents: async (req, res) => {
+        try {
+            const schoolId = req.user.school._id;
+            console.log('Fetching students for school:', schoolId);
+            
+            const students = await Student.find({ 
+                schoolId: schoolId,
+                isActive: true 
+            })
+            .select('firstName lastName gender section classId notes')
+            .populate('classId', 'year section academicYear') // Aggiunto populate per avere i dati della classe
+            .sort({ lastName: 1, firstName: 1 });
+
+            res.json({
+                success: true,
+                data: students
+            });
+        } catch (error) {
+            console.error('Error fetching school students:', error);
+            res.status(500).json({
+                success: false,
+                message: 'Errore nel recupero degli studenti della scuola'
+            });
+        }
     }
-
-
 
 
 

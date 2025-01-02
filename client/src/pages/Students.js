@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Box, 
   Paper, 
@@ -12,26 +12,23 @@ import StudentsTab from '../components/tabs/StudentsTab';
 import StudentModal from '../components/StudentModal';
 import { useApp } from '../context/AppContext';
 import { toast } from 'react-hot-toast';
-
+import axios from '../utils/axios';
 
 const Students = () => {
   const { state } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Debug all'avvio del componente
-  console.log('Complete state:', state);
-
-  // Estraiamo i dati dell'utente dalla struttura corretta
+  // Memo per userData
   const userData = useMemo(() => {
     const user = state.user?.user || state.user;
     console.log('Extracted user data:', user);
     return user;
   }, [state.user]);
 
- 
+  // Memo per schoolConfig
   const schoolConfig = useMemo(() => {
-    // Estrai i dati della scuola correttamente
     const schoolData = userData?.school;
     console.log('School data for config:', schoolData);
 
@@ -47,15 +44,42 @@ const Students = () => {
     };
   }, [userData?.school]);
 
+  // Memo per students
+  const [students, setStudents] = useState([]);
+  
+  useEffect(() => {
+    const fetchStudents = async () => {
+      if (!userData?.school?._id) {
+        setLoading(false);
+        return;
+      }
 
-  // Debug dello schoolConfig
-  console.log('Final schoolConfig:', schoolConfig);
+      try {
+        console.log('Fetching students for school:', userData.school._id);
+        const response = await axios.get('/api/students/school/assigned');
+        if (response.data.success) {
+          console.log('Students fetched:', response.data.data);
+          setStudents(response.data.data);
+        }
+      } catch (error) {
+        console.error('Error fetching students:', error);
+        toast.error('Errore nel caricamento degli studenti');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudents();
+  }, [userData?.school?._id]);
+
+  // Memo per studenti filtrati
+  const filteredStudents = useMemo(() => {
+    return students.filter(student => student.isActive);
+  }, [students]);
 
   const handleOpenModal = () => {
     console.log('handleOpenModal clicked');
-    console.log('Complete user object:', state.user);
-    console.log('Complete school object:', state.user?.school);
-
+    
     if (!userData?._id) {
       console.log('No user ID found');
       toast.error('Devi essere autenticato per aggiungere uno studente');
@@ -68,7 +92,6 @@ const Students = () => {
       return;
     }
 
-    console.log('Setting showModal to true');
     setShowModal(true);
   };
 
@@ -76,6 +99,8 @@ const Students = () => {
     try {
       const response = await axios.post('/api/students', studentData);
       if (response.data.success) {
+        // Aggiorna la lista degli studenti dopo l'aggiunta
+        setStudents(prev => [...prev, response.data.data]);
         toast.success('Studente aggiunto con successo');
         return { success: true };
       }
@@ -93,7 +118,8 @@ const Students = () => {
   console.log('Before render:', {
     userData,
     schoolConfig,
-    userID: userData?._id
+    studentsCount: filteredStudents.length,
+    loading
   });
 
   return (
@@ -114,13 +140,16 @@ const Students = () => {
               Debug Info:
             </Typography>
             <Typography variant="caption" display="block" color="textSecondary">
-              User ID: {state.user?._id || 'Not set'}
+              User ID: {userData?._id || 'Not set'}
             </Typography>
             <Typography variant="caption" display="block" color="textSecondary">
-              School Name: {state.user?.school?.nome || 'Not set'}
+              School Name: {userData?.school?.nome || 'Not set'}
             </Typography>
             <Typography variant="caption" display="block" color="textSecondary">
-              School ID: {state.user?.school?._id || 'Not set'}
+              School ID: {userData?.school?._id || 'Not set'}
+            </Typography>
+            <Typography variant="caption" display="block" color="textSecondary">
+              Students Count: {filteredStudents.length}
             </Typography>
           </Box>
           
@@ -139,15 +168,19 @@ const Students = () => {
             onClose={() => {
               console.log('Closing modal');
               setShowModal(false);
+              setSelectedStudent(null);
             }}
+            onSubmit={handleSubmit}
             student={selectedStudent}
             schoolConfig={schoolConfig}
-            userId={state.user?._id}
+            userId={userData?._id}
           />
         )}
 
         <Paper sx={{ p: 3 }}>
           <StudentsTab 
+            students={filteredStudents}
+            loading={loading}
             onEditStudent={(student) => {
               setSelectedStudent(student);
               setShowModal(true);

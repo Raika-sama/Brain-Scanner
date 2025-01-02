@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const School = require('../models/Schools');  // Nota: usando il tuo nome file
 const ClassService = require('../services/classService');
+const User = require('../models/Users');  // Aggiungi questo import
 const { authMiddleware } = require('../middleware/authMiddleware');
 
 
@@ -9,14 +11,28 @@ const { authMiddleware } = require('../middleware/authMiddleware');
 // TODO: In futuro questa logica sarà basata su una relazione User-School
 router.get('/assigned', authMiddleware, async (req, res) => {
     try {
-        console.log('Searching for school with userId:', req.user.userId); // Debug log
+        console.log('Searching for school with userId:', req.user.userId);
 
+        // Prima cerca l'utente
+        const user = await User.findById(req.user.userId);
+        console.log('Found user:', user);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Utente non trovato'
+            });
+        }
+
+        // Cerca la scuola
         const school = await School.findOne({
-            users: req.user.userId
+            'users.user': req.user.userId
         });
         
+        console.log('Found school:', school);
+
         if (!school) {
-            return res.status(200).json({ // Changed to 200 since this is a valid case
+            return res.status(200).json({
                 success: true,
                 data: null,
                 message: 'Nessuna scuola assegnata a questo utente'

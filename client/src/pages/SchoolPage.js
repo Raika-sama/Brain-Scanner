@@ -1,58 +1,72 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Card, 
-  CardHeader, 
-  CardTitle, 
-  CardContent 
-} from "../components/ui/card";
-import { 
-  School, 
-  MapPin, 
-  Phone, 
-  Mail, 
-  Edit2, 
-  Users, 
-  AlertCircle 
-} from 'lucide-react';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Grid,
+  Box,
+  Button,
+  Alert,
+  Skeleton,
+  IconButton
+} from '@mui/material';
+import {
+  School as SchoolIcon,
+  LocationOn as MapPinIcon,
+  Phone as PhoneIcon,
+  Email as MailIcon,
+  Edit as EditIcon,
+  Group as UsersIcon,
+  Warning as AlertCircleIcon
+} from '@mui/icons-material';
 import axios from '../utils/axios';
-import { Skeleton } from '../components/ui/skeleton';
-import Alert from '../components/ui/alert'
-import Button from '../components/ui/button'
 
 // Componente per le statistiche
 const StatCard = ({ icon: Icon, title, value, className }) => (
-  <Card className={className}>
-    <CardContent className="p-6">
-      <div className="flex items-center space-x-2">
-        <Icon className="w-6 h-6 text-blue-500" />
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="text-2xl font-bold">{value}</p>
-        </div>
-      </div>
+  <Card>
+    <CardContent>
+      <Box display="flex" alignItems="center" gap={2}>
+        <Icon sx={{ fontSize: 30, color: 'primary.main' }} />
+        <Box>
+          <Typography variant="body2" color="text.secondary">
+            {title}
+          </Typography>
+          <Typography variant="h4" component="div">
+            {value}
+          </Typography>
+        </Box>
+      </Box>
     </CardContent>
   </Card>
 );
 
 // Componente per i dettagli
 const DetailSection = ({ title, icon: Icon, children }) => (
-  <Card className="shadow-md hover:shadow-lg transition-shadow">
-    <CardHeader className="flex flex-row items-center space-x-2 pb-2">
-      <Icon className="w-5 h-5 text-blue-500" />
-      <CardTitle className="text-lg">{title}</CardTitle>
-    </CardHeader>
-    <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {children}
+  <Card sx={{ mb: 3 }}>
+    <CardHeader
+      avatar={<Icon sx={{ color: 'primary.main' }} />}
+      title={<Typography variant="h6">{title}</Typography>}
+      sx={{ pb: 1 }}
+    />
+    <CardContent>
+      <Grid container spacing={3}>
+        {children}
+      </Grid>
     </CardContent>
   </Card>
 );
 
 // Componente per i singoli dettagli
 const DetailItem = ({ label, value }) => (
-  <div className="space-y-1">
-    <h3 className="text-sm font-medium text-gray-500">{label}</h3>
-    <p className="text-base">{value || 'Non specificato'}</p>
-  </div>
+  <Grid item xs={12} md={6}>
+    <Typography variant="subtitle2" color="text.secondary">
+      {label}
+    </Typography>
+    <Typography variant="body1">
+      {value || 'Non specificato'}
+    </Typography>
+  </Grid>
 );
 
 const SchoolPage = () => {
@@ -70,8 +84,6 @@ const SchoolPage = () => {
       const response = await axios.get('/api/schools/assigned');
       if (response.data.success) {
         setSchool(response.data.data);
-        // Qui potresti fare una chiamata separata per le statistiche
-        // o calcolarle dai dati della scuola
       } else {
         setError(response.data.message);
       }
@@ -88,97 +100,102 @@ const SchoolPage = () => {
 
   if (loading) {
     return (
-      <div className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <Box sx={{ p: 3, '& > *': { mb: 3 } }}>
+        <Grid container spacing={3}>
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-32" />
+            <Grid item xs={12} md={4} key={i}>
+              <Skeleton variant="rectangular" height={100} />
+            </Grid>
           ))}
-        </div>
+        </Grid>
         {[1, 2, 3].map((i) => (
-          <Skeleton key={i} className="h-64" />
+          <Skeleton key={i} variant="rectangular" height={200} />
         ))}
-      </div>
+      </Box>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
+      <Box sx={{ p: 3 }}>
+        <Alert severity="error" icon={<AlertCircleIcon />}>
+          {error}
         </Alert>
-      </div>
+      </Box>
     );
   }
 
   if (!school) {
     return (
-      <div className="p-6">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Nessuna scuola assegnata</AlertDescription>
+      <Box sx={{ p: 3 }}>
+        <Alert severity="info" icon={<AlertCircleIcon />}>
+          Nessuna scuola assegnata
         </Alert>
-      </div>
+      </Box>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <Box sx={{ p: 3 }}>
       {/* Header con azioni */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h4" component="h1">
           Gestione Scuola
-        </h1>
+        </Typography>
         <Button
-          variant="outline"
-          className="flex items-center space-x-2"
+          variant="outlined"
+          startIcon={<EditIcon />}
           onClick={() => {/* Implementare modifica */}}
         >
-          <Edit2 className="w-4 h-4" />
-          <span>Modifica</span>
+          Modifica
         </Button>
-      </div>
+      </Box>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <StatCard 
-          icon={Users} 
-          title="Studenti Totali" 
-          value={stats.totalStudents} 
-        />
-        <StatCard 
-          icon={School} 
-          title="Classi" 
-          value={stats.totalClasses} 
-        />
-        <StatCard 
-          icon={Users} 
-          title="Docenti" 
-          value={stats.totalTeachers} 
-        />
-      </div>
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid item xs={12} md={4}>
+          <StatCard 
+            icon={UsersIcon}
+            title="Studenti Totali"
+            value={stats.totalStudents}
+          />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <StatCard
+            icon={SchoolIcon}
+            title="Classi"
+            value={stats.totalClasses}
+          />
+        </Grid>
+        <Grid item xs={12} md={4}>
+          <StatCard
+            icon={UsersIcon}
+            title="Docenti"
+            value={stats.totalTeachers}
+          />
+        </Grid>
+      </Grid>
 
       {/* Dettagli Scuola */}
-      <DetailSection title="Anagrafica" icon={School}>
+      <DetailSection title="Anagrafica" icon={SchoolIcon}>
         <DetailItem label="Nome Istituto" value={school.name} />
         <DetailItem label="Codice Meccanografico" value={school.mechanographicCode} />
-        <DetailItem 
-          label="Tipo Istituto" 
-          value={school.schoolType === 'middle_school' ? 
-            'Scuola Secondaria di Primo Grado' : 
-            'Scuola Secondaria di Secondo Grado'} 
+        <DetailItem
+          label="Tipo Istituto"
+          value={school.schoolType === 'middle_school' ?
+            'Scuola Secondaria di Primo Grado' :
+            'Scuola Secondaria di Secondo Grado'}
         />
         {school.schoolType !== 'middle_school' && (
-          <DetailItem 
-            label="Indirizzo Scolastico" 
-            value={school.institutionType} 
+          <DetailItem
+            label="Indirizzo Scolastico"
+            value={school.institutionType}
           />
         )}
       </DetailSection>
 
       {/* Localizzazione */}
-      <DetailSection title="Localizzazione" icon={MapPin}>
+      <DetailSection title="Localizzazione" icon={MapPinIcon}>
         <DetailItem label="Regione" value={school.region} />
         <DetailItem label="Provincia" value={school.province} />
         <DetailItem label="Città" value={school.city} />
@@ -186,20 +203,20 @@ const SchoolPage = () => {
       </DetailSection>
 
       {/* Contatti */}
-      <DetailSection title="Contatti" icon={Mail}>
+      <DetailSection title="Contatti" icon={MailIcon}>
         <DetailItem label="Email Istituzionale" value={school.email} />
         {school.manager && (
           <>
-            <DetailItem 
-              label="Referente" 
-              value={`${school.manager.firstName} ${school.manager.lastName}`} 
+            <DetailItem
+              label="Referente"
+              value={`${school.manager.firstName} ${school.manager.lastName}`}
             />
             <DetailItem label="Email Referente" value={school.manager.email} />
             <DetailItem label="Telefono Referente" value={school.manager.phone} />
           </>
         )}
       </DetailSection>
-    </div>
+    </Box>
   );
 };
 

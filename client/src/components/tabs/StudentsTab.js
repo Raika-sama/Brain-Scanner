@@ -26,15 +26,28 @@ import {
 } from '@mui/icons-material';
 import { useApp } from '../../context/AppContext';
 
-const StudentsTab = ({ classData }) => {
+const StudentsTab = ({ students = [], loading = false, onEditStudent, showActions = true }) => {
   const navigate = useNavigate();
   const { dispatch } = useApp();
   const [openDialog, setOpenDialog] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
+  const [filters, setFilters] = useState({
+    year: '',
+    section: '',
+    institutionType: ''
   });
+
+// Aggiungi i filtri
+const handleFilterChange = (filterName, value) => {
+  setFilters(prev => ({ ...prev, [filterName]: value }));
+};
+
+// Filtra gli studenti in base ai filtri attivi
+const filteredStudents = students.filter(student => {
+  if (filters.year && student.year !== filters.year) return false;
+  if (filters.section && student.section !== filters.section) return false;
+  return true;
+});
 
   // Handler per il click sullo studente
   const handleStudentClick = (studentId) => {

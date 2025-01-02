@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
-
-import { 
-  Activity, 
-  BookOpen, 
-  Users, 
-  Clock, 
-  CheckCircle2, 
-  PlusCircle, 
-  GraduationCap, 
-  FileSpreadsheet 
-} from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  Typography,
+  Grid,
+  Box,
+  useTheme
+} from '@mui/material';
+import {
+  Timeline as Activity,
+  MenuBook as BookOpen,
+  Group as Users,
+  Schedule as Clock,
+  CheckCircle as CheckCircle2,
+  AddCircle as PlusCircle,
+  School as GraduationCap,
+  TableChart as FileSpreadsheet
+} from '@mui/icons-material';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const chartData = [
@@ -22,6 +29,8 @@ const chartData = [
 ];
 
 const Dashboard = () => {
+  const theme = useTheme();
+  
   const [dashboardData] = useState({
     stats: {
       testDisponibili: 8,
@@ -50,124 +59,155 @@ const Dashboard = () => {
       title: "Test Disponibili",
       value: dashboardData.stats.testDisponibili,
       icon: BookOpen,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100"
+      color: theme.palette.primary.main,
+      bgColor: theme.palette.primary.light
     },
     {
-      title: "Test Completati", 
+      title: "Test Completati",
       value: dashboardData.stats.testCompletati,
       icon: CheckCircle2,
-      color: "text-green-600",
-      bgColor: "bg-green-100"
+      color: theme.palette.success.main,
+      bgColor: theme.palette.success.light
     },
     {
       title: "Test in Corso",
       value: dashboardData.stats.testInCorso,
       icon: Clock,
-      color: "text-orange-600",
-      bgColor: "bg-orange-100"
+      color: theme.palette.warning.main,
+      bgColor: theme.palette.warning.light
     },
     {
       title: "Media Risultati",
       value: `${dashboardData.stats.mediaRisultati}%`,
       icon: Activity,
-      color: "text-purple-600",
-      bgColor: "bg-purple-100"
+      color: theme.palette.secondary.main,
+      bgColor: theme.palette.secondary.light
     }
   ];
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+    <Box sx={{ p: 3, bgcolor: 'grey.50', minHeight: '100vh' }}>
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <Grid container spacing={3} sx={{ mb: 3 }}>
         {statsCards.map((card, index) => (
-          <Card key={index} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-gray-500">
-                {card.title}
-              </CardTitle>
-              <div className={`${card.bgColor} p-2 rounded-lg`}>
-                <card.icon className={`w-4 h-4 ${card.color}`} />
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{card.value}</div>
-            </CardContent>
-          </Card>
+          <Grid item xs={12} md={6} lg={3} key={index}>
+            <Card sx={{ 
+              '&:hover': { 
+                boxShadow: 6,
+                transition: 'box-shadow 0.3s ease-in-out'
+              }
+            }}>
+              <CardHeader
+                sx={{ pb: 1 }}
+                title={
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      {card.title}
+                    </Typography>
+                    <Box sx={{ p: 1, borderRadius: 2, bgcolor: card.bgColor }}>
+                      <card.icon sx={{ fontSize: 20, color: card.color }} />
+                    </Box>
+                  </Box>
+                }
+              />
+              <CardContent>
+                <Typography variant="h4" component="div">
+                  {card.value}
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
         ))}
-      </div>
+      </Grid>
 
       {/* Activity Chart */}
-      <Card className="col-span-4">
-        <CardHeader>
-          <CardTitle>Attività Settimanale</CardTitle>
-        </CardHeader>
+      <Card sx={{ mb: 3 }}>
+        <CardHeader title="Attività Settimanale" />
         <CardContent>
-          <div className="h-96">
+          <Box sx={{ height: 400 }}>
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorCompletati" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                    <stop offset="5%" stopColor={theme.palette.primary.main} stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor={theme.palette.primary.main} stopOpacity={0}/>
                   </linearGradient>
                   <linearGradient id="colorInCorso" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#EC4899" stopOpacity={0.1}/>
-                    <stop offset="95%" stopColor="#EC4899" stopOpacity={0}/>
+                    <stop offset="5%" stopColor={theme.palette.secondary.main} stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor={theme.palette.secondary.main} stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200" />
-                <XAxis dataKey="name" className="text-xs" />
-                <YAxis className="text-xs" />
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
                 <Tooltip />
                 <Area
                   type="monotone"
                   dataKey="completati"
-                  stroke="#4F46E5"
+                  stroke={theme.palette.primary.main}
                   fillOpacity={1}
                   fill="url(#colorCompletati)"
                 />
                 <Area
                   type="monotone"
                   dataKey="inCorso"
-                  stroke="#EC4899"
+                  stroke={theme.palette.secondary.main}
                   fillOpacity={1}
                   fill="url(#colorInCorso)"
                 />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </Box>
         </CardContent>
       </Card>
 
       {/* Recent Activity */}
       <Card>
-        <CardHeader>
-          <CardTitle>Attività Recenti</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {dashboardData.recentActivities.map((activity, index) => (
-            <div key={index} 
-              className="flex items-start space-x-4 p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-              <div className={`p-2 rounded-full ${
-                activity.status === 'completed' ? 'bg-green-100' : 'bg-yellow-100'
-              }`}>
-                {activity.status === 'completed' ? (
-                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                ) : (
-                  <Clock className="w-5 h-5 text-yellow-600" />
-                )}
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-gray-900">{activity.title}</h3>
-                <p className="text-sm text-gray-600">{activity.class}</p>
-                <p className="text-sm text-gray-500 mt-1">{activity.time}</p>
-              </div>
-            </div>
-          ))}
+        <CardHeader title="Attività Recenti" />
+        <CardContent>
+          <Grid container spacing={2}>
+            {dashboardData.recentActivities.map((activity, index) => (
+              <Grid item xs={12} key={index}>
+                <Box sx={{ 
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 2,
+                  p: 2,
+                  borderRadius: 1,
+                  bgcolor: 'grey.50',
+                  '&:hover': { bgcolor: 'grey.100' }
+                }}>
+                  <Box sx={{ 
+                    p: 1, 
+                    borderRadius: '50%',
+                    bgcolor: activity.status === 'completed' 
+                      ? 'success.light'
+                      : 'warning.light'
+                  }}>
+                    {activity.status === 'completed' ? (
+                      <CheckCircle2 sx={{ color: 'success.main' }} />
+                    ) : (
+                      <Clock sx={{ color: 'warning.main' }} />
+                    )}
+                  </Box>
+                  <Box>
+                    <Typography variant="subtitle1">
+                      {activity.title}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {activity.class}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                      {activity.time}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
         </CardContent>
       </Card>
-    </div>
+    </Box>
   );
 };
 

@@ -117,4 +117,11 @@ router.delete('/:id/teachers/:teacherId',
     studentController.removeTeacher
 );
 
+// Aggiungi questa route dopo le altre routes principali e prima dell'export
+router.get('/school/assigned', 
+    authMiddleware,
+    validateRequest,
+    studentController.getSchoolStudents
+);
+
 module.exports = router;

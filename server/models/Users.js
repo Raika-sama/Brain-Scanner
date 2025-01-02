@@ -27,13 +27,19 @@ const userSchema = new mongoose.Schema({
        type: String,
        required: true
    },
-
+   defaultSchool: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'School'
+  },
    // User role and status
    role: {
-       type: String,
-       enum: ['teacher', 'admin'],
-       required: true
-   },
+      type: String,
+      enum: ['teacher', 'admin'],
+      required: true,
+      default: function() {
+        return this.role === 'Amministratore' ? 'admin' : 'teacher';
+      }
+    },
    isActive: {
        type: Boolean,
        default: true
