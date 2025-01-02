@@ -1,29 +1,67 @@
 import React, { createContext, useContext, useReducer } from 'react';
-import axios from 'axios';
+import axios from '../utils/axios';
 
 const AppContext = createContext();
 
-// Definizione dello stato iniziale
+// Stato iniziale
 const initialState = {
-  user: JSON.parse(localStorage.getItem('userData')) || null,// Aggiungi questo
+  user: JSON.parse(localStorage.getItem('userData')) || null,
   students: [],
   classes: [],
   schoolConfig: null,
+  currentClass: null,
   loading: false,
   error: null
 };
 
+// Utility per gestione errori
+const handleError = (dispatch, error, customMessage) => {
+  const errorMessage = error.response?.data?.message || 
+                      error.message || 
+                      customMessage;
+  dispatch({ 
+    type: 'SET_ERROR', 
+    payload: errorMessage 
+  });
+  return errorMessage;
+};
 
-// Reducer per gestire le azioni
+// Selectors
+export const selectors = {
+  getStudentsByClass: (state, classId) => 
+    state.students.filter(s => s.class?._id === classId),
+  
+  getFilteredStudents: (state, filters) => {
+    let filtered = state.students;
+    if (filters.year) {
+      filtered = filtered.filter(s => s.year === filters.year);
+    }
+    if (filters.section) {
+      filtered = filtered.filter(s => s.section === filters.section);
+    }
+    if (filters.institutionType) {
+      filtered = filtered.filter(s => s.institutionType === filters.institutionType);
+    }
+    if (filters.searchTerm) {
+      const term = filters.searchTerm.toLowerCase();
+      filtered = filtered.filter(s => 
+        s.firstName.toLowerCase().includes(term) ||
+        s.lastName.toLowerCase().includes(term)
+      );
+    }
+    return filtered;
+  }
+};
+
+// Reducer
 const appReducer = (state, action) => {
   switch (action.type) {
     case 'SET_USER':
-    console.log('Setting user in reducer:', action.payload);  
-     // Se i dati sono nidificati, prendi l'oggetto user interno
-    return {
+      return {
         ...state,
         user: action.payload
       };
+
     case 'SET_LOADING':
       return {
         ...state,
@@ -36,16 +74,31 @@ const appReducer = (state, action) => {
         error: action.payload
       };
 
+    case 'CLEAR_ERROR':
+      return {
+        ...state,
+        error: null
+      };
+
     case 'SET_STUDENTS':
       return {
         ...state,
-        students: action.payload
+        students: action.payload.map(student => ({
+          ...student,
+          teachers: student.teachers || []
+        }))
       };
 
     case 'SET_CLASSES':
       return {
         ...state,
         classes: action.payload
+      };
+
+    case 'SET_CURRENT_CLASS':
+      return {
+        ...state,
+        currentClass: action.payload
       };
 
     case 'SET_SCHOOL_CONFIG':
@@ -60,7 +113,7 @@ const appReducer = (state, action) => {
         ...state,
         students: [...state.students, {
           ...student,
-          teachers: student.teachers || [] // Assicuriamo che teachers sia sempre un array
+          teachers: student.teachers || []
         }],
         classes: state.classes.map(cls => 
           cls._id === classId 
@@ -79,7 +132,7 @@ const appReducer = (state, action) => {
           student._id === action.payload._id 
             ? {
                 ...action.payload,
-                teachers: action.payload.teachers || [] // Assicuriamo che teachers sia sempre un array
+                teachers: action.payload.teachers || []
               }
             : student
         )
@@ -88,10 +141,14 @@ const appReducer = (state, action) => {
     case 'DELETE_STUDENT':
       return {
         ...state,
-        students: state.students.filter(student => student._id !== action.payload),
+        students: state.students.filter(student => 
+          student._id !== action.payload
+        ),
         classes: state.classes.map(cls => ({
           ...cls,
-          students: cls.students ? cls.students.filter(id => id !== action.payload) : []
+          students: cls.students?.filter(id => 
+            id !== action.payload
+          ) || []
         }))
       };
 
@@ -101,208 +158,220 @@ const appReducer = (state, action) => {
         classes: [...state.classes, action.payload]
       };
 
+    case 'UPDATE_CLASS':
+      return {
+        ...state,
+        classes: state.classes.map(cls =>
+          cls._id === action.payload._id
+            ? action.payload
+            : cls
+        )
+      };
+
+    case 'DELETE_CLASS':
+      return {
+        ...state,
+        classes: state.classes.filter(cls => 
+          cls._id !== action.payload
+        ),
+        students: state.students.filter(student => 
+          student.class?._id !== action.payload
+        )
+      };
+
     default:
       return state;
   }
 };
-
-
-
-
 // Helper functions per le operazioni CRUD
-const addStudent = async (dispatch, studentData) => {
-  try {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    
-    let classId = studentData.classId;
-
-    // Se non abbiamo un classId, verifichiamo/creiamo la classe
-    if (!classId) {
-      const classResponse = await axios.post('http://localhost:5000/api/classes', {
-        number: studentData.number,
-        section: studentData.section,
-        schoolYear: new Date().getFullYear()
-      });
-      
-      if (classResponse.data.success) {
-        classId = classResponse.data.data._id;
-        dispatch({
-          type: 'ADD_CLASS',
-          payload: classResponse.data.data
-        });
-      } else {
-        throw new Error('Errore nella creazione della classe');
-      }
-    }
-
-    const userOperations = {
-      setUser: (dispatch, userData) => {
-        localStorage.setItem('userData', JSON.stringify(userData));
-        dispatch({ type: 'SET_USER', payload: userData });
-      },
-      
-      clearUser: (dispatch) => {
-        localStorage.removeItem('userData');
-        dispatch({ type: 'SET_USER', payload: null });
-      },
-      
-      updateUser: (dispatch, updates) => {
-        const currentUser = JSON.parse(localStorage.getItem('userData'));
-        const updatedUser = { ...currentUser, ...updates };
-        localStorage.setItem('userData', JSON.stringify(updatedUser));
-        dispatch({ type: 'SET_USER', payload: updatedUser });
-      }
-    };
-
-
-    // Creiamo lo studente con i campi teacher
-    const studentResponse = await axios.post('http://localhost:5000/api/students', {
-      ...studentData,
-      classId,
-      teacherId: studentData.teacherId,
-      teachers: studentData.teachers || []
-    });
-
-        if (studentResponse.data.success) {
-          dispatch({
-            type: 'ADD_STUDENT',
-            payload: {
-              student: studentResponse.data.data,
-              classId
-            }
-          });
-          return studentResponse.data.data;
-        } else {
-          throw new Error(studentResponse.data.message || 'Errore nella creazione dello studente');
+const studentOperations = {
+  fetchStudents: async (dispatch, teacherId) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.get('/api/students', {
+        params: {
+          teacherId,
+          includeTeachers: true
         }
-      } catch (error) {
-        dispatch({ 
-          type: 'SET_ERROR', 
-          payload: error.response?.data?.message || error.message || 'Errore nella creazione dello studente' 
-        });
-        throw error;
-      } finally {
-        dispatch({ type: 'SET_LOADING', payload: false });
+      });
+      
+      if (response.data.success) {
+        dispatch({ type: 'SET_STUDENTS', payload: response.data.data });
+      } else {
+        throw new Error('Errore nel caricamento degli studenti');
       }
-    };
-
-const updateStudent = async (dispatch, studentId, studentData) => {
-  try {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    const response = await axios.put(`http://localhost:5000/api/students/${studentId}`, {
-      ...studentData,
-      teachers: studentData.teachers || []  // Assicuriamo che teachers sia sempre presente
-    });
-    
-    if (response.data.success) {
-      dispatch({
-        type: 'UPDATE_STUDENT',
-        payload: response.data.data
-      });
-      return response.data.data;
-    } else {
-      throw new Error(response.data.message || 'Errore nell\'aggiornamento dello studente');
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nel caricamento degli studenti');
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  } catch (error) {
-    dispatch({ 
-      type: 'SET_ERROR', 
-      payload: error.response?.data?.message || error.message || 'Errore nell\'aggiornamento dello studente' 
-    });
-    throw error;
-  } finally {
-    dispatch({ type: 'SET_LOADING', payload: false });
+  },
+
+  addStudent: async (dispatch, studentData) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.post('/api/students', {
+        ...studentData,
+        teachers: studentData.teachers || []
+      });
+
+      if (response.data.success) {
+        dispatch({
+          type: 'ADD_STUDENT',
+          payload: {
+            student: response.data.data,
+            classId: studentData.classId
+          }
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nella creazione dello studente');
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  },
+
+  updateStudent: async (dispatch, studentId, studentData) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.put(`/api/students/${studentId}`, studentData);
+      
+      if (response.data.success) {
+        dispatch({
+          type: 'UPDATE_STUDENT',
+          payload: response.data.data
+        });
+        return response.data.data;
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nell\'aggiornamento dello studente');
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  },
+
+  deleteStudent: async (dispatch, studentId) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.delete(`/api/students/${studentId}`);
+      
+      if (response.data.success) {
+        dispatch({ type: 'DELETE_STUDENT', payload: studentId });
+        return true;
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nella eliminazione dello studente');
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   }
 };
 
-const deleteStudent = async (dispatch, studentId) => {
-  try {
-    dispatch({ type: 'SET_LOADING', payload: true });
-    const response = await axios.delete(`http://localhost:5000/api/students/${studentId}`);
-    
-    if (response.data.success) {
-      dispatch({
-        type: 'DELETE_STUDENT',
-        payload: studentId
-      });
-      return true;
-    } else {
-      throw new Error(response.data.message || 'Errore nella eliminazione dello studente');
+const classOperations = {
+  fetchClasses: async (dispatch) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.get('/api/classes');
+      
+      if (response.data.success) {
+        dispatch({ type: 'SET_CLASSES', payload: response.data.data });
+      } else {
+        throw new Error('Errore nel caricamento delle classi');
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nel caricamento delle classi');
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
     }
-  } catch (error) {
-    dispatch({ 
-      type: 'SET_ERROR', 
-      payload: error.response?.data?.message || error.message || 'Errore nella eliminazione dello studente' 
-    });
-    throw error;
-  } finally {
-    dispatch({ type: 'SET_LOADING', payload: false });
+  },
+
+  addClass: async (dispatch, classData) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.post('/api/classes', classData);
+      
+      if (response.data.success) {
+        dispatch({ type: 'ADD_CLASS', payload: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nella creazione della classe');
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  },
+
+  updateClass: async (dispatch, classId, classData) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.put(`/api/classes/${classId}`, classData);
+      
+      if (response.data.success) {
+        dispatch({ type: 'UPDATE_CLASS', payload: response.data.data });
+        return response.data.data;
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nell\'aggiornamento della classe');
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  },
+
+  deleteClass: async (dispatch, classId) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const response = await axios.delete(`/api/classes/${classId}`);
+      
+      if (response.data.success) {
+        dispatch({ type: 'DELETE_CLASS', payload: classId });
+        return true;
+      }
+    } catch (error) {
+      handleError(dispatch, error, 'Errore nella eliminazione della classe');
+      throw error;
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   }
 };
+
+// User operations
+const userOperations = {
+  setUser: (dispatch, userData) => {
+    localStorage.setItem('userData', JSON.stringify(userData));
+    dispatch({ type: 'SET_USER', payload: userData });
+  },
+  
+  clearUser: (dispatch) => {
+    localStorage.removeItem('userData');
+    dispatch({ type: 'SET_USER', payload: null });
+  },
+  
+  updateUser: (dispatch, updates) => {
+    const currentUser = JSON.parse(localStorage.getItem('userData'));
+    const updatedUser = { ...currentUser, ...updates };
+    localStorage.setItem('userData', JSON.stringify(updatedUser));
+    dispatch({ type: 'SET_USER', payload: updatedUser });
+  }
+};
+
 // Provider Component
 export const AppProvider = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  // Wrapper functions per i metodi helper
-  const studentOperations = {
-    addStudent: (studentData) => addStudent(dispatch, studentData),
-    updateStudent: (studentId, studentData) => updateStudent(dispatch, studentId, studentData),
-    deleteStudent: (studentId) => deleteStudent(dispatch, studentId),
-    
-    // Funzioni addizionali per il caricamento dei dati
-    fetchStudents: async (teacherId) => {
-      try {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        const response = await axios.get('http://localhost:5000/api/students', {
-          params: {
-            teacherId,
-            includeTeachers: true  // Per includere anche studenti dove l'utente è nell'array teachers
-          }
-        });
-        
-        if (response.data.success) {
-          // Assicuriamoci che tutti gli studenti abbiano l'array teachers
-          const studentsWithTeachers = response.data.data.map(student => ({
-            ...student,
-            teachers: student.teachers || []
-          }));
-          dispatch({ type: 'SET_STUDENTS', payload: studentsWithTeachers });
-        } else {
-          throw new Error('Errore nel caricamento degli studenti');
-        }
-      } catch (error) {
-        dispatch({ 
-          type: 'SET_ERROR', 
-          payload: error.response?.data?.message || error.message 
-        });
-      } finally {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
-    },
-
-    fetchSchoolConfig: async () => {
-      try {
-        dispatch({ type: 'SET_LOADING', payload: true });
-        const response = await axios.get('http://localhost:5000/api/schools/assigned');
-        if (response.data.success) {
-          dispatch({ type: 'SET_SCHOOL_CONFIG', payload: response.data.data });
-        } else {
-          throw new Error('Errore nel caricamento della configurazione scuola');
-        }
-      } catch (error) {
-        dispatch({ 
-          type: 'SET_ERROR', 
-          payload: error.response?.data?.message || error.message 
-        });
-      } finally {
-        dispatch({ type: 'SET_LOADING', payload: false });
-      }
-    }
-  };
-
   const value = {
     state,
     dispatch,
-    ...studentOperations
+    ...studentOperations,
+    ...classOperations,
+    ...userOperations,
+    selectors
   };
 
   return (
@@ -312,6 +381,7 @@ export const AppProvider = ({ children }) => {
   );
 };
 
+// Custom hook
 export function useApp() {
   const context = useContext(AppContext);
   if (!context) {
@@ -319,4 +389,3 @@ export function useApp() {
   }
   return context;
 }
-

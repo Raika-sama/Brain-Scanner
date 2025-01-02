@@ -1,192 +1,168 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import {
-  Container,
   Box,
+  Paper,
   Typography,
   Tabs,
   Tab,
-  Paper,
-  IconButton,
-  Breadcrumbs,
-  Link,
-  Skeleton,
-  useTheme
+  Card,
+  CardContent,
+  Fade,
+  Grow,
 } from '@mui/material';
-import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
-import SchoolIcon from '@mui/icons-material/School';
-import MenuBookIcon from '@mui/icons-material/MenuBook';
-import FolderIcon from '@mui/icons-material/Folder';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import axios from 'axios';
-
-// Componenti delle tab
+import {
+  People as PeopleIcon,
+  Analytics as AnalyticsIcon,
+  LibraryBooks as MaterialsIcon,
+} from '@mui/icons-material';
+import { useApp } from '../context/AppContext';
 import StudentsTab from '../components/tabs/StudentsTab';
-import TeachersTab from '../components/tabs/TeachersTab';
-import RegisterTab from '../components/tabs/RegisterTab';
-import MaterialsTab from '../components/tabs/MaterialsTab';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import AlertMessage from '../components/ui/AlertMessage';
 
-function TabPanel({ children, value, index, ...other }) {
-  return (
-    <div
+// Componente TabPanel per gestire il contenuto delle tabs
+const TabPanel = ({ children, value, index, ...props }) => (
+  <Fade in={value === index} timeout={500}>
+    <Box
       role="tabpanel"
       hidden={value !== index}
       id={`class-tabpanel-${index}`}
-      aria-labelledby={`class-tab-${index}`}
-      {...other}
+      {...props}
+      sx={{ pt: 3 }}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
-    </div>
-  );
-}
+      {value === index && children}
+    </Box>
+  </Fade>
+);
 
-const ClassDetail = () => {
-  const theme = useTheme();
-  const { classId } = useParams();
-  const navigate = useNavigate();
+const ClassDetails = () => {
+  const { id } = useParams();
+  const { state } = useApp();
   const [currentTab, setCurrentTab] = useState(0);
   const [classData, setClassData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchClassData = async () => {
-      try {
-        const response = await axios.get(`/api/classes/${classId}`);
-        setClassData(response.data.data);
-      } catch (err) {
-        setError(err.response?.data?.message || 'Errore nel caricamento della classe');
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Trova la classe corrispondente nel state
+    const currentClass = state.classes.find(c => c._id === id);
+    setClassData(currentClass);
+  }, [id, state.classes]);
 
-    fetchClassData();
-  }, [classId]);
+  if (state.loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!classData) {
+    return <AlertMessage severity="error" message="Classe non trovata" />;
+  }
 
   const handleTabChange = (event, newValue) => {
     setCurrentTab(newValue);
   };
 
-  if (loading) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Skeleton variant="rectangular" height={200} />
-        <Box sx={{ mt: 3 }}>
-          <Skeleton variant="rectangular" height={400} />
-        </Box>
-      </Container>
-    );
-  }
-
-  if (error) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Typography color="error" variant="h6">
-          {error}
-        </Typography>
-      </Container>
-    );
-  }
-
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      {/* Header */}
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <IconButton 
-            onClick={() => navigate('/classes')} 
-            sx={{ mr: 2 }}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Breadcrumbs>
-            <Link 
-              component="button"
-              variant="body1"
-              onClick={() => navigate('/classes')}
-              color="inherit"
-            >
-              Classi
-            </Link>
-            <Typography color="primary">
-              {classData?.number} {classData?.section}
-            </Typography>
-          </Breadcrumbs>
-        </Box>
-
+    <Box sx={{ p: 4, maxWidth: 1400, margin: '0 auto' }}>
+      {/* Header della classe */}
+      <Grow in timeout={500}>
         <Paper 
-          elevation={2} 
+          elevation={0} 
           sx={{ 
             p: 3, 
-            background: `linear-gradient(45deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-            color: 'white'
+            mb: 4, 
+            borderRadius: 3,
+            backgroundColor: 'primary.light',
+            color: 'white',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}
         >
-           <Typography variant="h4" component="h1" gutterBottom>
-            Classe {classData?.number} {classData?.section}  {/* Cambiato da nome e sezione */}
-          </Typography>
-          <Typography variant="subtitle1">
-            Anno Scolastico: {classData?.schoolYear}  {/* Cambiato da annoScolastico */}
-          </Typography>
-          <Box sx={{ mt: 2, display: 'flex', gap: 4 }}>
-            <Typography>
-              Studenti: {classData?.students?.length || 0}  {/* Cambiato da studenti */}
+          <Box>
+            <Typography variant="h4" sx={{ mb: 1 }}>
+              {`${classData.year}ª ${classData.section}`}
             </Typography>
-            <Typography>
-              Docenti: {classData?.teachers?.length || 0}  {/* Cambiato da docenti */}
+            <Typography variant="subtitle1">
+              {`${classData.students?.length || 0} studenti`}
             </Typography>
           </Box>
+          <PeopleIcon sx={{ fontSize: 48, opacity: 0.8 }} />
         </Paper>
-      </Box>
+      </Grow>
 
-      {/* Tabs */}
-      <Paper sx={{ mb: 3 }}>
-        <Tabs 
-          value={currentTab} 
-          onChange={handleTabChange}
-          variant="scrollable"
-          scrollButtons="auto"
-          sx={{ borderBottom: 1, borderColor: 'divider' }}
-        >
-          <Tab 
-            icon={<PeopleAltIcon />} 
-            label="Studenti" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<SchoolIcon />} 
-            label="Docenti" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<MenuBookIcon />} 
-            label="Registro" 
-            iconPosition="start"
-          />
-          <Tab 
-            icon={<FolderIcon />} 
-            label="Materiali" 
-            iconPosition="start"
-          />
-        </Tabs>
-      </Paper>
+      {/* Tabs Container */}
+      <Card 
+        sx={{ 
+          borderRadius: 3,
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)'
+        }}
+      >
+        <CardContent>
+          {/* Tabs Navigation */}
+          <Tabs 
+            value={currentTab} 
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{
+              '& .MuiTab-root': {
+                minHeight: 64,
+                fontSize: '1rem',
+                transition: 'all 0.2s',
+                '&:hover': {
+                  backgroundColor: 'action.hover',
+                }
+              }
+            }}
+          >
+            <Tab 
+              icon={<PeopleIcon />} 
+              label="Studenti" 
+              iconPosition="start"
+            />
+            <Tab 
+              icon={<AnalyticsIcon />} 
+              label="Analisi" 
+              iconPosition="start"
+            />
+            <Tab 
+              icon={<MaterialsIcon />} 
+              label="Materiali" 
+              iconPosition="start"
+            />
+          </Tabs>
 
-      {/* Tab Panels */}
-      <TabPanel value={currentTab} index={0}>
-        <StudentsTab classData={classData} setClassData={setClassData} />
-      </TabPanel>
-      <TabPanel value={currentTab} index={1}>
-        <TeachersTab classData={classData} setClassData={setClassData} />
-      </TabPanel>
-      <TabPanel value={currentTab} index={2}>
-        <RegisterTab classData={classData} />
-      </TabPanel>
-      <TabPanel value={currentTab} index={3}>
-        <MaterialsTab classData={classData} />
-      </TabPanel>
-    </Container>
+          {/* Tab Contents */}
+          <TabPanel value={currentTab} index={0}>
+            <StudentsTab classData={classData} />
+          </TabPanel>
+
+          <TabPanel value={currentTab} index={1}>
+            <Box sx={{ p: 2 }}>
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+                Analisi dei Test
+              </Typography>
+              {/* Contenuto per la sezione Analisi */}
+              <Typography variant="body1">
+                Qui verranno visualizzati i risultati dei test specifici della classe
+              </Typography>
+            </Box>
+          </TabPanel>
+
+          <TabPanel value={currentTab} index={2}>
+            <Box sx={{ p: 2 }}>
+              <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+                Materiali Didattici
+              </Typography>
+              {/* Contenuto per la sezione Materiali */}
+              <Typography variant="body1">
+                Qui verranno gestiti i materiali e i test della classe
+              </Typography>
+            </Box>
+          </TabPanel>
+        </CardContent>
+      </Card>
+    </Box>
   );
 };
 
-export default ClassDetail;
+export default ClassDetails;

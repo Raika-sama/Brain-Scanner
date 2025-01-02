@@ -1,172 +1,232 @@
-import React, { useMemo } from 'react';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Typography,
+  Button,
+  Paper,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   IconButton,
-  Tooltip,
-  TablePagination,
-  TableSortLabel
+  Typography,
+  Fade,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from '@mui/material';
-import { Edit as EditIcon } from '@mui/icons-material';
+import {
+  Add as AddIcon,
+  Edit as EditIcon,
+  Delete as DeleteIcon,
+} from '@mui/icons-material';
 import { useApp } from '../../context/AppContext';
 
-const StudentsTab = ({ 
-  classData, // Per filtrare per classe specifica
-  onEditStudent, // Callback per la modifica
-  showActions = true // Per mostrare/nascondere le azioni
-}) => {
-  const { state } = useApp();
-  const [page, setPage] = React.useState(0);
-  const [rowsPerPage, setRowsPerPage] = React.useState(10);
-  const [orderBy, setOrderBy] = React.useState('cognome');
-  const [order, setOrder] = React.useState('asc');
+const StudentsTab = ({ classData }) => {
+  const navigate = useNavigate();
+  const { dispatch } = useApp();
+  const [openDialog, setOpenDialog] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+  });
 
-  // Filtra e ordina gli studenti
-  const filteredStudents = useMemo(() => {
-    let students = classData 
-      ? state.students.filter(student => student.classe?._id === classData._id)
-      : state.students;
-
-    // Ordinamento
-    return students.sort((a, b) => {
-      const isAsc = order === 'asc';
-      switch (orderBy) {
-        case 'nome':
-          return isAsc ? a.nome.localeCompare(b.nome) : b.nome.localeCompare(a.nome);
-        case 'cognome':
-          return isAsc ? a.cognome.localeCompare(b.cognome) : b.cognome.localeCompare(a.cognome);
-        case 'sezione':
-          return isAsc ? a.sezione.localeCompare(b.sezione) : b.sezione.localeCompare(a.sezione);
-        default:
-          return 0;
-      }
-    });
-  }, [state.students, classData, order, orderBy]);
-
-  // Gestione della paginazione
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
+  // Handler per il click sullo studente
+  const handleStudentClick = (studentId) => {
+    navigate(`/students/${studentId}`);
   };
 
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
+  // Handlers per il dialog di aggiunta/modifica
+  const handleOpenDialog = (student = null) => {
+    if (student) {
+      setFormData({
+        firstName: student.firstName,
+        lastName: student.lastName,
+      });
+      setSelectedStudent(student);
+    } else {
+      setFormData({ firstName: '', lastName: '' });
+      setSelectedStudent(null);
+    }
+    setOpenDialog(true);
   };
 
-  // Gestione dell'ordinamento
-  const handleRequestSort = (property) => {
-    const isAsc = orderBy === property && order === 'asc';
-    setOrder(isAsc ? 'desc' : 'asc');
-    setOrderBy(property);
+  const handleCloseDialog = () => {
+    setOpenDialog(false);
+    setSelectedStudent(null);
+    setFormData({ firstName: '', lastName: '' });
   };
 
-  // Colonne della tabella
-  const columns = [
-    { id: 'nome', label: 'Nome' },
-    { id: 'cognome', label: 'Cognome' },
-    { id: 'sezione', label: 'Sezione' },
-    { id: 'dataNascita', label: 'Data di Nascita' },
-    ...(showActions ? [{ id: 'actions', label: 'Azioni' }] : [])
-  ];
+  const handleSubmit = () => {
+    // Qui implementeremo la logica per salvare/modificare lo studente
+    console.log('Saving student:', formData);
+    handleCloseDialog();
+  };
+
+  const handleDelete = (studentId) => {
+    // Qui implementeremo la logica per eliminare lo studente
+    console.log('Deleting student:', studentId);
+  };
 
   return (
-    <Box sx={{ width: '100%' }}>
-      <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold' }}>
-        {classData ? `Studenti della classe ${classData.number}${classData.section}` : 'Lista Studenti'}
-      </Typography>
+    <Box sx={{ position: 'relative' }}>
+      {/* Header con pulsante aggiungi */}
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          mb: 3 
+        }}
+      >
+        <Typography variant="h6" color="text.secondary">
+          Lista Studenti
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<AddIcon />}
+          onClick={() => handleOpenDialog()}
+          sx={{
+            backgroundColor: 'primary.light',
+            '&:hover': {
+              backgroundColor: 'primary.main',
+            },
+            borderRadius: 2,
+            px: 3
+          }}
+        >
+          Nuovo Studente
+        </Button>
+      </Box>
 
-      <Paper sx={{ width: '100%', mb: 2 }}>
-        <TableContainer>
-          <Table sx={{ minWidth: 750 }} aria-labelledby="tableTitle">
+      {/* Tabella Studenti */}
+      <Fade in timeout={500}>
+        <TableContainer 
+          component={Paper} 
+          sx={{ 
+            borderRadius: 2,
+            overflow: 'hidden',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+          }}
+        >
+          <Table>
             <TableHead>
-              <TableRow>
-                {columns.map((column) => (
-                  <TableCell
-                    key={column.id}
-                    sortDirection={orderBy === column.id ? order : false}
-                  >
-                    {column.id !== 'actions' ? (
-                      <TableSortLabel
-                        active={orderBy === column.id}
-                        direction={orderBy === column.id ? order : 'asc'}
-                        onClick={() => handleRequestSort(column.id)}
-                      >
-                        {column.label}
-                      </TableSortLabel>
-                    ) : (
-                      column.label
-                    )}
-                  </TableCell>
-                ))}
+              <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
+                <TableCell>Nome</TableCell>
+                <TableCell>Cognome</TableCell>
+                <TableCell align="right">Azioni</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredStudents
-                .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                .map((student) => (
-                  <TableRow
-                    hover
-                    key={student._id}
-                    sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
-                  >
-                    <TableCell>{student.nome}</TableCell>
-                    <TableCell>{student.cognome}</TableCell>
-                    <TableCell>{student.sezione}</TableCell>
-                    <TableCell>
-                      {new Date(student.dataNascita).toLocaleDateString('it-IT')}
-                    </TableCell>
-                    {showActions && (
-                      <TableCell>
-                        <Tooltip title="Modifica studente">
-                          <IconButton
-                            size="small"
-                            onClick={() => onEditStudent(student)}
-                            color="primary"
-                          >
-                            <EditIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              {filteredStudents.length === 0 && (
-                <TableRow>
+              {classData.students?.map((student) => (
+                <TableRow 
+                  key={student._id}
+                  sx={{ 
+                    '&:hover': { 
+                      backgroundColor: 'action.hover',
+                      cursor: 'pointer',
+                    },
+                    transition: 'background-color 0.2s'
+                  }}
+                >
                   <TableCell 
-                    colSpan={columns.length} 
-                    align="center"
-                    sx={{ py: 3 }}
+                    onClick={() => handleStudentClick(student._id)}
+                    sx={{ 
+                      color: 'primary.main',
+                      fontWeight: 500,
+                    }}
                   >
-                    <Typography variant="body1" color="text.secondary">
-                      Nessuno studente trovato
-                    </Typography>
+                    {student.firstName}
+                  </TableCell>
+                  <TableCell onClick={() => handleStudentClick(student._id)}>
+                    {student.lastName}
+                  </TableCell>
+                  <TableCell align="right">
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenDialog(student);
+                      }}
+                      sx={{ color: 'info.main' }}
+                    >
+                      <EditIcon />
+                    </IconButton>
+                    <IconButton 
+                      size="small" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(student._id);
+                      }}
+                      sx={{ color: 'error.light', ml: 1 }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
-              )}
+              ))}
             </TableBody>
           </Table>
         </TableContainer>
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={filteredStudents.length}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-          labelRowsPerPage="Righe per pagina"
-          labelDisplayedRows={({ from, to, count }) =>
-            `${from}-${to} di ${count}`
+      </Fade>
+
+      {/* Dialog per aggiunta/modifica studente */}
+      <Dialog 
+        open={openDialog} 
+        onClose={handleCloseDialog}
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            minWidth: 400
           }
-        />
-      </Paper>
+        }}
+      >
+        <DialogTitle>
+          {selectedStudent ? 'Modifica Studente' : 'Nuovo Studente'}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <TextField
+              fullWidth
+              label="Nome"
+              value={formData.firstName}
+              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+              sx={{ mb: 2 }}
+            />
+            <TextField
+              fullWidth
+              label="Cognome"
+              value={formData.lastName}
+              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3 }}>
+          <Button 
+            onClick={handleCloseDialog}
+            sx={{ color: 'text.secondary' }}
+          >
+            Annulla
+          </Button>
+          <Button 
+            variant="contained"
+            onClick={handleSubmit}
+            sx={{
+              backgroundColor: 'primary.light',
+              '&:hover': {
+                backgroundColor: 'primary.main',
+              }
+            }}
+          >
+            {selectedStudent ? 'Salva' : 'Aggiungi'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

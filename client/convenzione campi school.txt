@@ -1,0 +1,45 @@
+// Convenzione nomi campi
+const fieldStandards = {
+  // Scuola
+  school: {
+    id: '_id',
+    name: 'name',                    // nome scuola
+    schoolType: 'schoolType',        // 'middle_school' | 'high_school'
+    institutionType: 'institutionType', // 'scientific' | 'classical' | 'artistic' | 'none'
+    sections: 'sections',            // array di lettere maiuscole
+    numberOfYears: 'numberOfYears',  // 3 o 5
+    region: 'region',
+    province: 'province',
+    address: 'address'
+  },
+
+  // Classe
+  class: {
+    id: '_id',
+    year: 'year',                    // anno (1-5)
+    section: 'section',              // sezione (A-Z)
+    schoolYear: 'schoolYear',        // anno scolastico (2024/2025)
+    students: 'students',            // array di riferimenti studenti
+    teachers: 'teachers'             // array di riferimenti docenti
+  },
+
+  // Studente
+  student: {
+    id: '_id',
+    firstName: 'firstName',          // nome
+    lastName: 'lastName',            // cognome
+    birthDate: 'birthDate',         // data nascita
+    class: 'class',                 // riferimento alla classe
+    school: 'school'                // riferimento alla scuola
+  },
+
+  // Utente
+  user: {
+    id: '_id',
+    firstName: 'firstName',
+    lastName: 'lastName',
+    email: 'email',
+    role: 'role',                   // 'teacher' | 'admin'
+    school: 'school'                // riferimento alla scuola principale
+  }
+}
