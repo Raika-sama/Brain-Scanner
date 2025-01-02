@@ -544,7 +544,6 @@ assignClass: async (req, res) => {
 
     getSchoolStudents: async (req, res) => {
         try {
-            // Prima recuperiamo l'utente
             const user = await User.findById(req.user.userId);
             
             if (!user) {
@@ -554,7 +553,6 @@ assignClass: async (req, res) => {
                 });
             }
     
-            // Utilizziamo il metodo definito nello schema per ottenere la scuola
             const defaultSchool = await user.getDefaultSchool();
     
             if (!defaultSchool || !defaultSchool._id) {
@@ -564,9 +562,14 @@ assignClass: async (req, res) => {
                 });
             }
     
+            // Aggiunta controllo permessi
             const students = await Student.find({ 
                 schoolId: defaultSchool._id,
-                isActive: true 
+                isActive: true,
+                $or: [
+                    { mainTeacher: user._id },
+                    { teachers: user._id }
+                ]
             })
             .select('firstName lastName gender section classId notes needsClassAssignment')
             .populate('classId', 'year section academicYear')
