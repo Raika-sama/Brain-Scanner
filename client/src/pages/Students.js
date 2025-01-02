@@ -7,7 +7,7 @@ import {
   Container,
   Alert
 } from '@mui/material';
-import { Add as AddIcon, School as SchoolIcon } from '@mui/icons-material';
+import { Add as AddIcon } from '@mui/icons-material';
 import StudentsTab from '../components/tabs/StudentsTab';
 import StudentModal from '../components/StudentModal';
 import { useApp } from '../context/AppContext';
@@ -19,21 +19,23 @@ const Students = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [students, setStudents] = useState([]);
 
-  // Memo per userData
+  // Memo per userData con validation
   const userData = useMemo(() => {
+    if (!state.user) {
+      console.warn('No user data in state');
+      return null;
+    }
     const user = state.user?.user || state.user;
     console.log('Extracted user data:', user);
     return user;
   }, [state.user]);
 
-  // Memo per schoolConfig
+  // Memo per schoolConfig con validation
   const schoolConfig = useMemo(() => {
-    const schoolData = userData?.school;
-    console.log('School data for config:', schoolData);
-
-    if (!schoolData || !schoolData._id) {
-      console.warn('Missing or invalid school data:', schoolData);
+    if (!userData?.school?._id) {
+      console.warn('No school data available');
       return null;
     }
 
@@ -44,22 +46,21 @@ const Students = () => {
     };
   }, [userData?.school]);
 
-  // Memo per students
-  const [students, setStudents] = useState([]);
-  
+  // Fetch students
   useEffect(() => {
     const fetchStudents = async () => {
       if (!userData?.school?._id) {
+        console.warn('No school ID available for fetching students');
         setLoading(false);
         return;
       }
 
       try {
-        console.log('Fetching students for school:', userData.school._id);
         const response = await axios.get('/api/students/school/assigned');
         if (response.data.success) {
-          console.log('Students fetched:', response.data.data);
           setStudents(response.data.data);
+        } else {
+          throw new Error(response.data.message);
         }
       } catch (error) {
         console.error('Error fetching students:', error);
@@ -72,22 +73,13 @@ const Students = () => {
     fetchStudents();
   }, [userData?.school?._id]);
 
-  // Memo per studenti filtrati
-  const filteredStudents = useMemo(() => {
-    return students.filter(student => student.isActive);
-  }, [students]);
-
   const handleOpenModal = () => {
-    console.log('handleOpenModal clicked');
-    
     if (!userData?._id) {
-      console.log('No user ID found');
       toast.error('Devi essere autenticato per aggiungere uno studente');
       return;
     }
   
-    if (!userData?.school?._id) {
-      console.log('No school associated');
+    if (!schoolConfig) {
       toast.error('Nessuna scuola associata al tuo profilo');
       return;
     }
@@ -97,82 +89,48 @@ const Students = () => {
 
   const handleSubmit = async (studentData) => {
     try {
-      console.log('Dati studente ricevuti:', studentData);
-      console.log('School Config:', schoolConfig); // Verifichiamo i dati della scuola
-      
-      // Generiamo l'anno accademico corrente
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const academicYear = `${currentYear}/${currentYear + 1}`;
-  
-      // Prima controlliamo se la classe esiste
-      const classQueryParams = {
-        year: studentData.number,
-        section: studentData.section,
-        schoolId: schoolConfig._id,
-        academicYear: academicYear
+      console.log('Submitting student data:', studentData);
+
+      // Crea lo studente senza classe
+      const createStudentPayload = {
+        firstName: studentData.firstName.trim(),
+        lastName: studentData.lastName.trim(),
+        gender: studentData.gender.toUpperCase(),
+        notes: studentData.notes?.trim() || ''
       };
-      console.log('Ricerca classe con parametri:', classQueryParams);
-  
-      const classResponse = await axios.get('/api/classes', {
-        params: classQueryParams
-      });
-  
-      let classId;
-  
-      // Se la classe non esiste, la creiamo
-      if (!classResponse.data.data || classResponse.data.data.length === 0) {
-        const className = `${studentData.number}${studentData.section} ${academicYear}`;
+
+      console.log('Creating student with payload:', createStudentPayload);
+
+      const response = await axios.post('/api/students', createStudentPayload);
+
+      if (response.data.success) {
+        toast.success('Studente creato con successo');
         
-        const newClassData = {
-          // Campi base
-          name: className,
-          year: parseInt(studentData.number),
-          section: studentData.section.toUpperCase(),
-          academicYear: academicYear,
-          
-          // Referencias
-          schoolId: schoolConfig._id,
-          mainTeacher: userData._id,
-          teachers: [userData._id],
-          
-          // Altri campi
-          isActive: true
-        };
-  
-        console.log('Payload creazione classe:', newClassData);
-  
-        const createClassResponse = await axios.post('/api/classes', newClassData);
-  
-        if (createClassResponse.data.success) {
-          classId = createClassResponse.data.data._id;
-          console.log('Classe creata con ID:', classId);
-        } else {
-          throw new Error(createClassResponse.data.message || 'Errore nella creazione della classe');
-        }
+        // Aggiorna la lista degli studenti
+        setStudents(prevStudents => [...prevStudents, response.data.data]);
+        
+        // Chiudi il modal
+        setShowModal(false);
+        return { success: true };
       } else {
-        classId = classResponse.data.data[0]._id;
-        console.log('Classe esistente trovata con ID:', classId);
+        throw new Error(response.data.message);
       }
-  
-      // Resto del codice per la creazione dello studente...
-  
+
     } catch (error) {
-      console.error('Payload inviato:', error.config?.data);
-      console.error('Errore completo:', error);
+      console.error('Error creating student:', error);
       const errorMessage = error.response?.data?.message || 'Errore durante il salvataggio';
       toast.error(errorMessage);
       return { success: false, message: errorMessage };
     }
   };
-  
-  
-  
-  
-  
-  
-  // Debug dei valori prima del render
-  console.log('Before render:', {
+
+  // Filtered students memo
+  const filteredStudents = useMemo(() => {
+    return students.filter(student => student.isActive);
+  }, [students]);
+
+  // Debug info
+  console.log('Component state:', {
     userData,
     schoolConfig,
     studentsCount: filteredStudents.length,
@@ -193,37 +151,44 @@ const Students = () => {
             <Typography variant="h4" component="h1" gutterBottom>
               Gestione Studenti
             </Typography>
-            <Typography variant="caption" color="textSecondary">
-              Debug Info:
-            </Typography>
-            <Typography variant="caption" display="block" color="textSecondary">
-              User ID: {userData?._id || 'Not set'}
-            </Typography>
-            <Typography variant="caption" display="block" color="textSecondary">
-              School Name: {userData?.school?.nome || 'Not set'}
-            </Typography>
-            <Typography variant="caption" display="block" color="textSecondary">
-              School ID: {userData?.school?._id || 'Not set'}
-            </Typography>
-            <Typography variant="caption" display="block" color="textSecondary">
-              Students Count: {filteredStudents.length}
-            </Typography>
+            {process.env.NODE_ENV === 'development' && (
+              <Box sx={{ mt: 1 }}>
+                <Typography variant="caption" color="textSecondary">
+                  Debug Info:
+                </Typography>
+                <Typography variant="caption" display="block" color="textSecondary">
+                  User ID: {userData?._id || 'Not set'}
+                </Typography>
+                <Typography variant="caption" display="block" color="textSecondary">
+                  School ID: {schoolConfig?._id || 'Not set'}
+                </Typography>
+                <Typography variant="caption" display="block" color="textSecondary">
+                  Students: {filteredStudents.length}
+                </Typography>
+              </Box>
+            )}
           </Box>
           
           <Button
             variant="contained"
             startIcon={<AddIcon />}
             onClick={handleOpenModal}
+            disabled={!schoolConfig}
           >
             Aggiungi Studente
           </Button>
         </Paper>
 
+        {!schoolConfig && (
+          <Alert severity="warning">
+            Nessuna scuola associata al tuo profilo. Impossibile gestire gli studenti.
+          </Alert>
+        )}
+
         {showModal && (
           <StudentModal
             isOpen={showModal}
             onClose={() => {
-              console.log('Closing modal');
               setShowModal(false);
               setSelectedStudent(null);
             }}

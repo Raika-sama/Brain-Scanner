@@ -2,6 +2,7 @@ const Student = require('../models/Student');
 const School = require('../models/Schools');
 const Class = require('../models/Class');
 const mongoose = require('mongoose');
+const User = require('../models/Users');
 
 const studentController = {
     
@@ -543,20 +544,28 @@ assignClass: async (req, res) => {
 
     getSchoolStudents: async (req, res) => {
         try {
-            // Usa schoolId direttamente da req.user invece di req.user.school._id
-            const schoolId = req.user.schoolId;
+            // Prima recuperiamo l'utente
+            const user = await User.findById(req.user.userId);
             
-            if (!schoolId) {
+            if (!user) {
                 return res.status(400).json({
                     success: false,
-                    message: 'SchoolId non trovato per l\'utente corrente'
+                    message: 'Utente non trovato'
                 });
             }
     
-            console.log('Fetching students for school:', schoolId);
-            
+            // Utilizziamo il metodo definito nello schema per ottenere la scuola
+            const defaultSchool = await user.getDefaultSchool();
+    
+            if (!defaultSchool || !defaultSchool._id) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Nessuna scuola associata all\'utente'
+                });
+            }
+    
             const students = await Student.find({ 
-                schoolId: schoolId,
+                schoolId: defaultSchool._id,
                 isActive: true 
             })
             .select('firstName lastName gender section classId notes needsClassAssignment')
@@ -568,13 +577,13 @@ assignClass: async (req, res) => {
                 data: students
             });
         } catch (error) {
-            console.error('Error fetching school students:', error);
+            console.error('Error in getSchoolStudents:', error);
             res.status(500).json({
                 success: false,
                 message: 'Errore nel recupero degli studenti della scuola'
             });
         }
-    }
+    },
 
 
 
