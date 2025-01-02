@@ -145,9 +145,23 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig, userId
 
     setIsLoading(true);
     try {
+      console.log('Submit data:', {
+        schoolConfig,
+        userId,
+        formData
+      });
+      
       let classId = null;
       
       if (shouldCreateNewClass) {
+        if (!schoolConfig?._id) {
+          throw new Error('ID scuola mancante');
+        }
+  
+        if (!userId) {
+          throw new Error('ID utente mancante');
+        }
+
         const classData = {
           number: parseInt(formData.number),
           section: formData.section.toUpperCase(),
@@ -157,6 +171,8 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig, userId
           teachers: [userId]
         };
 
+        console.log('Creating new class with data:', classData);
+
         const createClass = window.confirm(
           `La classe ${formData.number}${formData.section} non esiste. Vuoi crearla?`
         );
@@ -164,8 +180,12 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig, userId
         if (createClass) {
           try {
             const newClassResponse = await axios.post('/api/classes', classData);
+            console.log('Class creation response:', newClassResponse);
+
             if (newClassResponse.data.success) {
               classId = newClassResponse.data.data._id;
+            } else {
+              throw new Error(newClassResponse.data.message || 'Errore durante la creazione della classe');
             }
           } catch (classError) {
             console.error('Errore creazione classe:', classError);

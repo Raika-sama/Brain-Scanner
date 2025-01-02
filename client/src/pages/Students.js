@@ -20,16 +20,36 @@ const Students = () => {
   const [selectedStudent, setSelectedStudent] = useState(null);
 
   // Debug all'avvio del componente
-  console.log('User data:', state.user);
-  console.log('School object:', state.user?.school);
+  console.log('Complete state:', state);
 
   // Estraiamo i dati dell'utente dalla struttura corretta
   const userData = useMemo(() => {
-    return state.user?.user || state.user || null;
+    const user = state.user?.user || state.user;
+    console.log('Extracted user data:', user);
+    return user;
   }, [state.user]);
 
-  // Debug dopo l'estrazione
-  console.log('Extracted userData:', userData);
+ 
+  const schoolConfig = useMemo(() => {
+    // Estrai i dati della scuola correttamente
+    const schoolData = userData?.school;
+    console.log('School data for config:', schoolData);
+
+    if (!schoolData || !schoolData._id) {
+      console.warn('Missing or invalid school data:', schoolData);
+      return null;
+    }
+
+    return {
+      _id: userData.school._id,
+      tipo_istituto: userData.school.tipo_istituto,
+      sezioni_disponibili: userData.school.sezioni_disponibili || ['A', 'B', 'C']
+    };
+  }, [userData?.school]);
+
+
+  // Debug dello schoolConfig
+  console.log('Final schoolConfig:', schoolConfig);
 
   const handleOpenModal = () => {
     console.log('handleOpenModal clicked');
@@ -52,17 +72,29 @@ const Students = () => {
     setShowModal(true);
   };
 
-  const schoolConfig = useMemo(() => {
-    // Prendiamo l'oggetto scuola completo
-    const schoolData = state.user?.school;
-    console.log('Creating schoolConfig with:', schoolData);
+  const handleSubmit = async (studentData) => {
+    try {
+      const response = await axios.post('/api/students', studentData);
+      if (response.data.success) {
+        toast.success('Studente aggiunto con successo');
+        return { success: true };
+      }
+      return { success: false, message: response.data.message };
+    } catch (error) {
+      console.error('Errore salvataggio studente:', error);
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Errore durante il salvataggio' 
+      };
+    }
+  };
 
-    return {
-      _id: schoolData?._id,
-      tipo_istituto: schoolData?.tipo_istituto,
-      sezioni_disponibili: schoolData?.sezioni_disponibili || ['A', 'B', 'C']
-    };
-  }, [state.user?.school]);
+  // Debug dei valori prima del render
+  console.log('Before render:', {
+    userData,
+    schoolConfig,
+    userID: userData?._id
+  });
 
   return (
     <Container maxWidth="xl">
