@@ -5,7 +5,7 @@ const studentController = require('../controllers/studentController');
 const { authMiddleware } = require('../middleware/authMiddleware');
 const { validateRequest } = require('../middleware/validateRequest');
 
-// Validazioni base per studente singolo
+// Validazioni base per studente
 const studentValidations = [
     body('nome')
         .trim()
@@ -17,33 +17,46 @@ const studentValidations = [
         .notEmpty().withMessage('Il cognome è obbligatorio')
         .isLength({ min: 2 }).withMessage('Il cognome deve essere di almeno 2 caratteri'),
     
-    body('sesso')
+    body('gender')
         .trim()
-        .notEmpty().withMessage('Il sesso è obbligatorio')
-        .isIn(['M', 'F']).withMessage('Il sesso deve essere M o F'),
+        .notEmpty().withMessage('Il genere è obbligatorio')
+        .isIn(['M', 'F']).withMessage('Il genere deve essere M o F'),
     
-    body('classe')
-        .notEmpty().withMessage('La classe è obbligatoria')
-        .isString().withMessage('La classe deve essere una stringa')
-        .matches(/^[1-5]$/).withMessage('La classe deve essere un numero da 1 a 5'),
+    body('number')
+        .notEmpty().withMessage('Il numero della classe è obbligatorio')
+        .isInt({ min: 1, max: 5 }).withMessage('Il numero della classe deve essere tra 1 e 5'),
     
-    body('sezione')
+    body('section')
         .notEmpty().withMessage('La sezione è obbligatoria')
-        .isString().withMessage('La sezione deve essere una stringa')
-        .matches(/^[A-Z]$/).withMessage('La sezione deve essere una lettera maiuscola')
+        .matches(/^[A-Z]$/).withMessage('La sezione deve essere una lettera maiuscola'),
+    
+    // Note è opzionale
+    body('note')
+        .optional()
+        .trim()
+        .isString().withMessage('Le note devono essere una stringa')
 ];
 
 // Validazioni per ricerca e filtri
 const searchValidations = [
-    query('classe').optional().trim(),
-    query('sezione').optional().trim(),
+    query('number').optional().isInt({ min: 1, max: 5 })
+        .withMessage('Il numero della classe deve essere tra 1 e 5'),
+    query('section').optional().matches(/^[A-Z]$/)
+        .withMessage('La sezione deve essere una lettera maiuscola'),
     query('search').optional().trim()
 ];
 
 // Validazione ID
-const idValidation = param('id').isMongoId().withMessage('ID non valido');
+const idValidation = param('id').isMongoId().withMessage('ID studente non valido');
 
-// Definizione delle routes
+// Validazioni per la gestione dei teacher
+const teacherValidations = [
+    body('teacherId')
+        .notEmpty().withMessage('ID teacher obbligatorio')
+        .isMongoId().withMessage('ID teacher non valido')
+];
+
+// Routes principali
 router.get('/', 
     authMiddleware,
     searchValidations,
@@ -77,6 +90,24 @@ router.delete('/:id',
     [idValidation],
     validateRequest,
     studentController.deleteStudent
+);
+
+// Nuove route per la gestione dei teacher
+router.post('/:id/teachers', 
+    authMiddleware, 
+    [idValidation, ...teacherValidations], 
+    validateRequest,
+    studentController.addTeacher
+);
+
+router.delete('/:id/teachers/:teacherId', 
+    authMiddleware, 
+    [
+        idValidation,
+        param('teacherId').isMongoId().withMessage('ID teacher non valido')
+    ], 
+    validateRequest,
+    studentController.removeTeacher
 );
 
 module.exports = router;

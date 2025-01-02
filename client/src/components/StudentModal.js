@@ -5,16 +5,10 @@ import { Card } from "./ui/card";
 import { toast } from 'react-hot-toast';
 import axios from '../utils/axios';
 
-const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
-  useEffect(() => {
-    console.log('=== PROPS STUDENT MODAL ===');
-    console.log('schoolConfig:', schoolConfig);
-    console.log('isOpen:', isOpen);
-    console.log('student:', student);
-  }, [schoolConfig, isOpen, student]);
 
-  console.log('StudentModal props:', { isOpen, student, schoolConfig });
-  
+const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
+  const { user } = useAuth();
+
   useEffect(() => {
     if (schoolConfig && !schoolConfig._id) {
       console.error('schoolConfig non contiene _id:', schoolConfig);
@@ -27,7 +21,9 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
     gender: '',
     number: '',
     section: '',
-    note: ''
+    note: '',
+    teacherId: '',
+    teachers: []
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -35,7 +31,7 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   const [existingClasses, setExistingClasses] = useState([]);
   const [shouldCreateNewClass, setShouldCreateNewClass] = useState(false);
   const [isCheckingClass, setIsCheckingClass] = useState(false);
-  
+
   const getCurrentSchoolYear = () => {
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -58,25 +54,25 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
 
   useEffect(() => {
     const fetchClasses = async () => {
-        try {
-            const currentSchoolYear = getCurrentSchoolYear();
-            const response = await axios.get('/api/classes', {
-                params: { 
-                    school: schoolConfig._id,
-                    schoolYear: currentSchoolYear  // Aggiungiamo questo parametro
-                }
-            });
-            setExistingClasses(response.data.data || []);
-        } catch (error) {
-            console.error('Errore nel caricamento delle classi:', error);
-            toast.error('Errore nel caricamento delle classi');
-        }
+      try {
+        const currentSchoolYear = getCurrentSchoolYear();
+        const response = await axios.get('/api/classes', {
+          params: { 
+            school: schoolConfig._id,
+            schoolYear: currentSchoolYear
+          }
+        });
+        setExistingClasses(response.data.data || []);
+      } catch (error) {
+        console.error('Errore nel caricamento delle classi:', error);
+        toast.error('Errore nel caricamento delle classi');
+      }
     };
 
     if (isOpen && schoolConfig._id) {
-        fetchClasses();
+      fetchClasses();
     }
-}, [isOpen, schoolConfig._id]);
+  }, [isOpen, schoolConfig._id]);
 
   useEffect(() => {
     setFormData({
@@ -85,9 +81,11 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
       gender: student?.gender || '',
       number: student?.number || '',
       section: student?.section || '',
-      note: student?.note || ''
+      note: student?.note || '',
+      teacherId: student?.teacherId || user?._id || '',
+      teachers: student?.teachers || (user?._id ? [user._id] : [])
     });
-  }, [student]);
+  }, [student, user]);
 
   useEffect(() => {
     const checkClassExists = async () => {
@@ -97,9 +95,9 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
       const currentSchoolYear = getCurrentSchoolYear();
         
       const classExists = existingClasses.some(
-            c => c.number === parseInt(formData.number) && 
-                 c.section === formData.section.toUpperCase() &&
-                 c.schoolYear === currentSchoolYear  // Aggiungiamo questo controllo
+        c => c.number === parseInt(formData.number) && 
+             c.section === formData.section.toUpperCase() &&
+             c.schoolYear === currentSchoolYear
       );
       setShouldCreateNewClass(!classExists);
       setIsCheckingClass(false);
@@ -107,7 +105,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
 
     checkClassExists();
   }, [formData.number, formData.section, existingClasses]);
-
   const validateForm = () => {
     const newErrors = {};
     if (!formData.nome.trim()) newErrors.nome = 'Il nome è obbligatorio';
@@ -140,13 +137,10 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
           number: parseInt(formData.number),
           section: formData.section.toUpperCase(),
           schoolYear: getCurrentSchoolYear(),
-          schoolId: schoolConfig._id
+          schoolId: schoolConfig._id,
+          teacherId: user._id,
+          teachers: [user._id]
         };
-
-        // Aggiungiamo log per debug
-        console.log('=== TENTATIVO CREAZIONE CLASSE ===');
-        console.log('Class Data:', classData);
-        console.log('SchoolConfig:', schoolConfig);
 
         const createClass = window.confirm(
           `La classe ${formData.number}${formData.section} non esiste. Vuoi crearla?`
@@ -154,22 +148,19 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
 
         if (createClass) {
           try {
-            // Log della richiesta
             console.log('Invio richiesta POST a /api/classes con dati:', classData);
-            
             const newClassResponse = await axios.post('/api/classes', classData);
             console.log('Risposta creazione classe:', newClassResponse.data);
             if (newClassResponse.data.success) {
               classId = newClassResponse.data.data._id;
             }
           } catch (classError) {
-            
             console.error('Dettagli errore creazione classe:', {
               message: classError.message,
               response: classError.response?.data,
               status: classError.response?.status,
               data: classData
-          });
+            });
             
             toast.error(classError.response?.data?.message || 'Errore durante la creazione della classe');
             setIsLoading(false);
@@ -179,12 +170,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
           setIsLoading(false);
           return;
         }
-      } else {
-        const existingClass = existingClasses.find(
-          c => c.number === parseInt(formData.number) && 
-               c.section === formData.section.toUpperCase()
-        );
-        classId = existingClass?._id;
       }
 
       const studentData = {
@@ -195,8 +180,14 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
         section: formData.section.toUpperCase(),
         schoolYear: getCurrentSchoolYear(),
         schoolId: schoolConfig._id,
-        note: formData.note || ''
+        note: formData.note || '',
+        teacherId: student ? student.teacherId : user._id,
+        teachers: student ? student.teachers : [user._id]
       };
+
+      if (classId) {
+        studentData.classId = classId;
+      }
 
       const result = await onSubmit(studentData);
       
@@ -213,7 +204,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
       setIsLoading(false);
     }
   };
-
   if (!isOpen) return null;
 
   return (

@@ -8,32 +8,52 @@ const studentController = {
     // GET - Recupera tutti gli studenti con filtri
     getStudents: async (req, res) => {
         try {
-            const { search, classe, sezione } = req.query;
-            const query = { school: req.user.scuola };
+            const { search, number, section } = req.query;
+            const query = { 
+                schoolId: req.user.schoolId,
+                $or: [
+                    { teacherId: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            };
 
             // Applica i filtri se presenti
             if (search) {
-                query.$or = [
-                    { nome: new RegExp(search, 'i') },
-                    { cognome: new RegExp(search, 'i') }
+                query.$and = [
+                    {
+                        $or: [
+                            { nome: new RegExp(search, 'i') },
+                            { cognome: new RegExp(search, 'i') }
+                        ]
+                    }
                 ];
             }
+
+            if (number) query.number = number;
+            if (section) query.section = section;
             
             const students = await Student.find(query)
-                .populate('classe', 'numero sezione annoScolastico')
+                .populate('schoolId', 'name type')
+                .populate('teacherId', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email')
                 .sort({ cognome: 1, nome: 1 });
 
             const formattedStudents = students.map(student => ({
                 _id: student._id,
                 nome: student.nome,
                 cognome: student.cognome,
-                classe: student.classe?.numero || '',
-                sezione: student.classe?.sezione || '',
-                sesso: student.sesso,
+                number: student.number,
+                section: student.section,
+                gender: student.gender,
+                teacherId: student.teacherId,
+                teachers: student.teachers,
                 note: student.note
             }));
 
-            res.json({ success: true, data: formattedStudents });
+            res.json({ 
+                success: true, 
+                data: formattedStudents 
+            });
         } catch (error) {
             console.error('Errore in getStudents:', error);
             res.status(500).json({ 
@@ -48,13 +68,20 @@ const studentController = {
         try {
             const student = await Student.findOne({
                 _id: req.params.id,
-                school: req.user.scuola
-            }).populate('classe', 'numero sezione annoScolastico');
+                schoolId: req.user.schoolId,
+                $or: [
+                    { teacherId: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            })
+            .populate('schoolId', 'name type')
+            .populate('teacherId', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email');
             
             if (!student) {
                 return res.status(404).json({ 
                     success: false, 
-                    message: 'Studente non trovato' 
+                    message: 'Studente non trovato o non hai i permessi per visualizzarlo' 
                 });
             }
 
@@ -77,22 +104,23 @@ const studentController = {
             const { 
                 nome, 
                 cognome, 
-                sesso, 
-                classe: classeId,  // Ora riceviamo direttamente l'ID della classe
-                sezione,
-                annoScolastico,
+                gender,
+                number,
+                section,
                 note 
             } = req.body;
-            const school = req.user.schoolId;  // Uso schoolId invece di scuola per consistenza
+
+            const schoolYear = ClassService.getCurrentSchoolYear();
+            const schoolId = req.user.schoolId;
 
             // Verifica duplicati
             const existingStudent = await Student.findOne({
                 nome,
                 cognome,
-                school,
-                classe: classeId,
-                sezione,
-                annoScolastico
+                schoolId,
+                number,
+                section,
+                schoolYear
             });
 
             if (existingStudent) {
@@ -102,33 +130,34 @@ const studentController = {
                 });
             }
 
-            // Verifica che la classe esista
-            const classeExists = await Class.findById(classeId);
-            if (!classeExists) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Classe non trovata'
-                });
-            }
-
             // Crea lo studente
             const student = new Student({
                 nome,
                 cognome,
-                sesso: sesso.toUpperCase(),
-                classe: classeId,
-                sezione,
-                annoScolastico,
-                school,
-                teachers: [req.user._id],  // Aggiungi l'utente corrente come insegnante
+                gender: gender.toUpperCase(),
+                number,
+                section,
+                schoolYear,
+                schoolId,
+                teacherId: req.user._id,      // Imposta l'utente corrente come teacher principale
+                teachers: [req.user._id],      // Aggiungilo anche all'array dei teachers
                 note: note || ''
             });
 
             await student.save({ session });
 
-            // Aggiorna la classe con il nuovo studente
-            await Class.findByIdAndUpdate(
-                classeId,
+            // Aggiorna la classe correlata
+            await Class.findOneAndUpdate(
+                {
+                    number,
+                    section,
+                    schoolYear,
+                    schoolId,
+                    $or: [
+                        { teacherId: req.user._id },
+                        { teachers: req.user._id }
+                    ]
+                },
                 { $addToSet: { students: student._id } },
                 { session }
             );
@@ -137,8 +166,9 @@ const studentController = {
 
             // Popola i dati per la risposta
             const populatedStudent = await Student.findById(student._id)
-                .populate('classe', 'number section schoolYear')  // Aggiornati i nomi dei campi
-                .populate('teachers', 'firstName lastName email');  // Aggiungiamo i dati degli insegnanti
+                .populate('schoolId', 'name type')
+                .populate('teacherId', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email');
 
             res.status(201).json({
                 success: true,
@@ -164,45 +194,39 @@ const studentController = {
         session.startTransaction();
 
         try {
-            const { nome, cognome, sesso, classe: numeroClasse, sezione, note } = req.body;
-            
-            // Se viene cambiata la classe, aggiorna le relazioni
-            if (numeroClasse && sezione) {
-                const classe = await ClassService.findOrCreateClass({
-                    numero: numeroClasse,
-                    sezione,
-                    annoScolastico: ClassService.getCurrentSchoolYear(),
-                    school: req.user.scuola
-                }, session);
-
-                // Rimuovi lo studente dalla vecchia classe e aggiungilo alla nuova
-                await Class.updateMany(
-                    { students: req.params.id },
-                    { $pull: { students: req.params.id } },
-                    { session }
-                );
-
-                await Class.findByIdAndUpdate(
-                    classe._id,
-                    { $addToSet: { students: req.params.id } },
-                    { session }
-                );
-
-                req.body.classe = classe._id;
-            }
+            // Rimuovi teacherId dal body se presente
+            const updateData = { ...req.body };
+            delete updateData.teacherId;
 
             const updatedStudent = await Student.findOneAndUpdate(
-                { _id: req.params.id, school: req.user.scuola },
-                { ...req.body, sesso: sesso?.toUpperCase() },
-                { new: true, runValidators: true, session }
-            ).populate('classe', 'numero sezione annoScolastico');
+                { 
+                    _id: req.params.id,
+                    schoolId: req.user.schoolId,
+                    $or: [
+                        { teacherId: req.user._id },
+                        { teachers: req.user._id }
+                    ]
+                },
+                updateData,
+                { 
+                    new: true, 
+                    runValidators: true, 
+                    session 
+                }
+            )
+            .populate('schoolId', 'name type')
+            .populate('teacherId', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email');
 
             if (!updatedStudent) {
-                throw new Error('Studente non trovato');
+                throw new Error('Studente non trovato o non hai i permessi per modificarlo');
             }
 
             await session.commitTransaction();
-            res.json({ success: true, data: updatedStudent });
+            res.json({ 
+                success: true, 
+                data: updatedStudent 
+            });
 
         } catch (error) {
             await session.abortTransaction();
@@ -224,11 +248,12 @@ const studentController = {
         try {
             const student = await Student.findOne({
                 _id: req.params.id,
-                school: req.user.scuola
+                schoolId: req.user.schoolId,
+                teacherId: req.user._id  // Solo il teacher principale può eliminare lo studente
             });
 
             if (!student) {
-                throw new Error('Studente non trovato');
+                throw new Error('Studente non trovato o non hai i permessi per eliminarlo');
             }
 
             // Rimuovi lo studente dalla classe
@@ -242,7 +267,10 @@ const studentController = {
             await student.remove({ session });
             
             await session.commitTransaction();
-            res.json({ success: true, message: 'Studente eliminato con successo' });
+            res.json({ 
+                success: true, 
+                message: 'Studente eliminato con successo' 
+            });
 
         } catch (error) {
             await session.abortTransaction();
@@ -250,6 +278,123 @@ const studentController = {
             res.status(500).json({
                 success: false,
                 message: error.message || 'Errore nell\'eliminazione dello studente'
+            });
+        } finally {
+            session.endSession();
+        }
+    },
+
+    // Aggiungi un teacher allo studente
+    addTeacher: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const { teacherId } = req.body;
+            
+            // Verifica che l'utente corrente sia il teacher principale o un teacher esistente
+            const student = await Student.findOne({
+                _id: req.params.id,
+                schoolId: req.user.schoolId,
+                $or: [
+                    { teacherId: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            }).session(session);
+
+            if (!student) {
+                throw new Error('Studente non trovato o permessi insufficienti');
+            }
+
+            // Verifica che il teacher da aggiungere non sia già presente
+            if (student.teachers.includes(teacherId)) {
+                throw new Error('Il teacher è già assegnato a questo studente');
+            }
+
+            // Aggiungi il nuovo teacher
+            student.teachers.push(teacherId);
+            await student.save({ session });
+
+            // Popola i dati per la risposta
+            const updatedStudent = await Student.findById(student._id)
+                .populate('schoolId', 'name type')
+                .populate('teacherId', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email')
+                .session(session);
+
+            await session.commitTransaction();
+
+            res.json({
+                success: true,
+                data: updatedStudent,
+                message: 'Teacher aggiunto con successo'
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            console.error('Errore in addTeacher:', error);
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nell\'aggiunta del teacher'
+            });
+        } finally {
+            session.endSession();
+        }
+    },
+
+    // Rimuovi un teacher dallo studente
+    removeTeacher: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const teacherIdToRemove = req.params.teacherId;
+
+            // Verifica che l'utente corrente sia il teacher principale
+            const student = await Student.findOne({
+                _id: req.params.id,
+                schoolId: req.user.schoolId,
+                teacherId: req.user._id  // Solo il teacher principale può rimuovere altri teacher
+            }).session(session);
+
+            if (!student) {
+                throw new Error('Studente non trovato o permessi insufficienti');
+            }
+
+            // Non permettere la rimozione del teacher principale
+            if (teacherIdToRemove === student.teacherId.toString()) {
+                throw new Error('Non puoi rimuovere il teacher principale');
+            }
+
+            // Verifica che il teacher da rimuovere sia effettivamente assegnato
+            if (!student.teachers.includes(teacherIdToRemove)) {
+                throw new Error('Il teacher non è assegnato a questo studente');
+            }
+
+            // Rimuovi il teacher
+            student.teachers = student.teachers.filter(
+                id => id.toString() !== teacherIdToRemove
+            );
+            await student.save({ session });
+
+            // Popola i dati per la risposta
+            const updatedStudent = await Student.findById(student._id)
+                .populate('schoolId', 'name type')
+                .populate('teacherId', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email')
+                .session(session);
+
+            await session.commitTransaction();
+            res.json({
+                success: true,
+                message: 'Teacher rimosso con successo'
+            });
+
+        } catch (error) {
+            await session.abortTransaction();
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nella rimozione del teacher'
             });
         } finally {
             session.endSession();

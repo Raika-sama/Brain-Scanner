@@ -28,6 +28,12 @@ const classSchema = new mongoose.Schema({
         ref: 'School',
         required: [true, 'Il riferimento alla scuola è obbligatorio']
     },
+    // Aggiungiamo il teacher principale
+    teacherId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, 'Il teacher principale è obbligatorio']
+    },
     specialization: {
         type: String,
         required: false
@@ -44,26 +50,49 @@ const classSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Rimuovi tutti gli indici esistenti eccetto _id
-classSchema.indexes().forEach(async (index) => {
-    if (!index[0]._id) {
-        await mongoose.model('Class').collection.dropIndex(index[0]);
-    }
-});
-
-// Crea un nuovo indice con i nomi corretti
+// Aggiorniamo gli indici per includere teacherId
 classSchema.index(
     { 
         schoolId: 1, 
         number: 1, 
         section: 1, 
-        schoolYear: 1 
+        schoolYear: 1,
+        teacherId: 1 
     }, 
     { 
         unique: true,
         name: 'class_unique_composite_index'
     }
 );
+
+// Aggiungiamo un indice per le query per teacher
+classSchema.index({ teacherId: 1 });
+classSchema.index({ teachers: 1 });
+
+// Middleware per assicurarsi che il teacherId sia sempre nei teachers
+classSchema.pre('save', function(next) {
+    if (this.teacherId && !this.teachers.includes(this.teacherId)) {
+        this.teachers.push(this.teacherId);
+    }
+    next();
+});
+
+// Method per aggiungere un teacher
+classSchema.methods.addTeacher = function(teacherId) {
+    if (!this.teachers.includes(teacherId)) {
+        this.teachers.push(teacherId);
+    }
+    return this;
+};
+
+// Method per rimuovere un teacher (non permettiamo la rimozione del teacherId principale)
+classSchema.methods.removeTeacher = function(teacherId) {
+    if (teacherId.equals(this.teacherId)) {
+        throw new Error('Non puoi rimuovere il teacher principale');
+    }
+    this.teachers = this.teachers.filter(id => !id.equals(teacherId));
+    return this;
+};
 
 const Class = mongoose.model('Class', classSchema);
 

@@ -11,7 +11,7 @@ const studentSchema = new mongoose.Schema({
         required: [true, 'Il cognome è obbligatorio'],
         trim: true
     },
-    gender: {                     // Cambiato da 'sesso' a 'gender'
+    gender: {
         type: String,
         enum: {
             values: ['M', 'F'],
@@ -20,19 +20,19 @@ const studentSchema = new mongoose.Schema({
         required: true,
         uppercase: true
     },
-    number: {                     // Cambiato da 'classe' a 'number'
+    number: {
         type: Number,
         required: true,
         min: [1, 'La classe deve essere maggiore di 0'],
         max: [5, 'La classe non può essere maggiore di 5']
     },
-    section: {                    // Cambiato da 'sezione' a 'section'
+    section: {
         type: String,
         required: true,
         uppercase: true,
         trim: true
     },
-    schoolYear: {                 // Cambiato da 'annoScolastico' a 'schoolYear'
+    schoolYear: {
         type: String,
         required: true,
         validate: {
@@ -42,10 +42,16 @@ const studentSchema = new mongoose.Schema({
             message: props => `${props.value} non è un formato valido per l'anno scolastico (es. 2023/2024)`
         }
     },
-    schoolId: {                   // Cambiato da 'school' a 'schoolId'
+    schoolId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'School',
         required: [true, 'La scuola è obbligatoria']
+    },
+    // Aggiungiamo il teacher principale
+    teacherId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: [true, 'Il teacher principale è obbligatorio']
     },
     teachers: [{
         type: mongoose.Schema.Types.ObjectId,
@@ -60,22 +66,38 @@ const studentSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// Indice composito unico
+// Aggiorniamo l'indice composito
 studentSchema.index({ 
     schoolId: 1, 
     number: 1, 
     section: 1, 
     schoolYear: 1,
     nome: 1,
-    cognome: 1 
+    cognome: 1,
+    teacherId: 1
 }, { 
     unique: true,
     name: "student_unique_composite_index"
 });
 
-// Indici aggiuntivi per performance
+// Indici per performance
 studentSchema.index({ schoolId: 1, number: 1, section: 1 });
+studentSchema.index({ teacherId: 1 });
 studentSchema.index({ teachers: 1 });
+
+// Middleware per assicurare che teacherId sia sempre in teachers
+studentSchema.pre('save', function(next) {
+    // Converti gender in maiuscolo
+    if (this.gender) {
+        this.gender = this.gender.toUpperCase();
+    }
+    
+    // Assicura che teacherId sia in teachers
+    if (this.teacherId && !this.teachers.includes(this.teacherId)) {
+        this.teachers.push(this.teacherId);
+    }
+    next();
+});
 
 // Methods
 studentSchema.methods.addTeacher = function(teacherId) {
@@ -86,18 +108,12 @@ studentSchema.methods.addTeacher = function(teacherId) {
 };
 
 studentSchema.methods.removeTeacher = function(teacherId) {
+    if (teacherId.equals(this.teacherId)) {
+        throw new Error('Non puoi rimuovere il teacher principale');
+    }
     this.teachers = this.teachers.filter(id => !id.equals(teacherId));
     return this;
 };
-
-// Middleware
-studentSchema.pre('save', function(next) {
-    // Converti gender in maiuscolo
-    if (this.gender) {
-        this.gender = this.gender.toUpperCase();
-    }
-    next();
-});
 
 const Student = mongoose.model('Student', studentSchema);
 

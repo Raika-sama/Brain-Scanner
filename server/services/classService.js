@@ -2,9 +2,9 @@ const Class = require('../models/Class');
 const { startSession } = require('mongoose');
 
 class ClassService {
-    // Trova o crea una classe
+    // Trova o crea una classe, aggiornata con teacherId
     static async findOrCreateClass(classData, session) {
-        const { number, section, schoolYear, schoolId } = classData;  // Cambiati i nomi dei campi
+        const { number, section, schoolYear, schoolId, teacherId } = classData;
 
         try {
             // Cerca una classe esistente
@@ -12,7 +12,11 @@ class ClassService {
                 number,
                 section,
                 schoolYear,
-                schoolId
+                schoolId,
+                $or: [
+                    { teacherId },
+                    { teachers: teacherId }
+                ]
             }).session(session);
 
             // Se non esiste, creala
@@ -22,6 +26,8 @@ class ClassService {
                     section,
                     schoolYear,
                     schoolId,
+                    teacherId,         // Aggiungiamo il teacherId
+                    teachers: [teacherId],  // Inizializziamo l'array teachers
                     students: []
                 });
                 await existingClass.save({ session });
@@ -34,7 +40,7 @@ class ClassService {
         }
     }
 
-    // Calcola l'anno scolastico corrente (questo metodo è già corretto)
+    // Calcola l'anno scolastico corrente (invariato)
     static getCurrentSchoolYear() {
         const now = new Date();
         const currentYear = now.getFullYear();
@@ -47,24 +53,37 @@ class ClassService {
         }
     }
 
-    // Valida la classe rispetto al tipo di scuola
-    static validateClassNumber(number, schoolType) {  // Cambiato da numero a number
+    // Valida la classe rispetto al tipo di scuola (invariato)
+    static validateClassNumber(number, schoolType) {
         const num = parseInt(number);
         if (isNaN(num)) return false;
 
         switch (schoolType) {
-            case 'middle_school':  // Cambiato da primo_grado a middle_school
+            case 'middle_school':
                 return num >= 1 && num <= 3;
-            case 'high_school':    // Cambiato da secondo_grado a high_school
+            case 'high_school':
                 return num >= 1 && num <= 5;
             default:
                 return false;
         }
     }
 
-    // Aggiorna gli studenti di una classe
-    static async updateClassStudents(classId, studentId, action = 'add', session) {
+    // Aggiorna gli studenti di una classe, aggiunto controllo teacher
+    static async updateClassStudents(classId, studentId, teacherId, action = 'add', session) {
         try {
+            // Verifica che l'utente abbia i permessi per modificare la classe
+            const classExists = await Class.findOne({
+                _id: classId,
+                $or: [
+                    { teacherId },
+                    { teachers: teacherId }
+                ]
+            });
+
+            if (!classExists) {
+                throw new Error('Classe non trovata o permessi insufficienti');
+            }
+
             const updateOperation = action === 'add' 
                 ? { $addToSet: { students: studentId } }
                 : { $pull: { students: studentId } };
@@ -86,16 +105,20 @@ class ClassService {
         }
     }
 
-    // Verifica duplicati in una classe
-    static async checkDuplicateStudent(firstName, lastName, classId, schoolId) {  // Cambiati i nomi dei parametri
+    // Verifica duplicati in una classe, aggiunto controllo teacher
+    static async checkDuplicateStudent(firstName, lastName, classId, schoolId, teacherId) {
         try {
             const existingStudent = await Class.findOne({
                 _id: classId,
                 schoolId,
+                $or: [
+                    { teacherId },
+                    { teachers: teacherId }
+                ],
                 students: {
                     $elemMatch: {
-                        firstName: new RegExp(`^${firstName}$`, 'i'),  // Cambiato da nome a firstName
-                        lastName: new RegExp(`^${lastName}$`, 'i')     // Cambiato da cognome a lastName
+                        firstName: new RegExp(`^${firstName}$`, 'i'),
+                        lastName: new RegExp(`^${lastName}$`, 'i')
                     }
                 }
             });
@@ -104,6 +127,47 @@ class ClassService {
         } catch (error) {
             console.error('Errore in checkDuplicateStudent:', error);
             throw new Error(`Errore nella verifica dei duplicati: ${error.message}`);
+        }
+    }
+
+    // Nuovo metodo per gestire i teacher
+    static async updateClassTeachers(classId, teacherToModify, currentTeacherId, action = 'add') {
+        const session = await startSession();
+        session.startTransaction();
+
+        try {
+            const classDoc = await Class.findOne({
+                _id: classId,
+                $or: [
+                    { teacherId: currentTeacherId },
+                    { teachers: currentTeacherId }
+                ]
+            }).session(session);
+
+            if (!classDoc) {
+                throw new Error('Classe non trovata o permessi insufficienti');
+            }
+
+            if (action === 'add') {
+                if (!classDoc.teachers.includes(teacherToModify)) {
+                    classDoc.teachers.push(teacherToModify);
+                }
+            } else if (action === 'remove') {
+                // Non permettere la rimozione del teacherId principale
+                if (teacherToModify.equals(classDoc.teacherId)) {
+                    throw new Error('Non puoi rimuovere il teacher principale');
+                }
+                classDoc.teachers = classDoc.teachers.filter(t => !t.equals(teacherToModify));
+            }
+
+            await classDoc.save({ session });
+            await session.commitTransaction();
+            return classDoc;
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
         }
     }
 }
