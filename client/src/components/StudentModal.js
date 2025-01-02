@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useForm, Controller } from 'react-hook-form';
 import {
   Dialog,
   DialogTitle,
@@ -11,117 +12,68 @@ import {
   Typography,
   IconButton,
   Alert,
-  MenuItem,
   FormControl,
   InputLabel,
   Select,
+  MenuItem,
   RadioGroup,
   FormControlLabel,
   Radio
 } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
-import axios from '../utils/axios';
-import { toast } from 'react-hot-toast';
+import { useApp } from '../context/AppContext';
 
-const StudentModal = ({ isOpen, onClose, student, schoolConfig, userId, onSubmit }) => {
-  const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    gender: '',
-    number: '',  // per la classe
-    section: '',
-    note: ''     // campo opzionale per le note
+const StudentModal = ({ isOpen, onClose, student, schoolConfig }) => {
+  const { addStudent, updateStudent } = useApp();
+  
+  const { control, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
+    defaultValues: {
+      firstName: student?.firstName || '',
+      lastName: student?.lastName || '',
+      gender: student?.gender || '',
+      number: student?.classId?.year?.toString() || '',
+      section: student?.section || '',
+      note: student?.note || ''
+    }
   });
 
-  const [error, setError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Popola il form se stiamo modificando uno studente esistente
-  useEffect(() => {
+  React.useEffect(() => {
     if (student) {
-      setFormData({
-        firstName: student.firstName || '',
-        lastName: student.lastName || '',
-        gender: student.gender || '',
-        number: student.number?.toString() || '',
-        section: student.section || '',
-        note: student.note || ''
+      reset({
+        firstName: student.firstName,
+        lastName: student.lastName,
+        gender: student.gender,
+        number: student.classId?.year?.toString(),
+        section: student.section,
+        note: student.note
       });
     }
-  }, [student]);
+  }, [student, reset]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    setError(null); // Pulisce gli errori quando l'utente modifica un campo
-  };
-
-  const validateForm = () => {
-    const errors = [];
-    if (!formData.firstName.trim()) errors.push('Il nome è obbligatorio');
-    if (!formData.lastName.trim()) errors.push('Il cognome è obbligatorio');
-    if (!formData.gender) errors.push('Il genere è obbligatorio');
-    if (!formData.number) errors.push('La classe è obbligatoria');
-    if (!formData.section) errors.push('La sezione è obbligatoria');
-    
-    return errors;
-  };
-
-  const handleSubmit = async (studentData) => {
+  const onSubmit = async (data) => {
     try {
-      console.log('Dati studente ricevuti:', studentData);
-      
-      // Prepariamo il payload dello studente senza classId
-      const studentPayload = {
-        // Campi obbligatori
-        firstName: studentData.firstName.trim(),
-        lastName: studentData.lastName.trim(),
-        gender: studentData.gender.toUpperCase(), // 'M' o 'F'
+      const studentData = {
+        firstName: data.firstName.trim(),
+        lastName: data.lastName.trim(),
+        gender: data.gender.toUpperCase(),
+        classId: {
+          year: parseInt(data.number),
+          section: data.section
+        },
+        note: data.note?.trim() || '',
         schoolId: schoolConfig._id,
-        mainTeacher: userData._id,
-        
-        // Campi opzionali
-        notes: studentData.note?.trim() || '',
         isActive: true
       };
-  
-      console.log('Payload studente da inviare:', studentPayload);
-  
-      const response = await axios.post('/api/students', studentPayload);
-      
-      if (response.data.success) {
-        toast.success('Studente aggiunto con successo');
-        // Mostriamo l'alert per indicare che lo studente deve essere associato a una classe
-        toast.warning('Importante: Lo studente deve essere associato a una classe', {
-          autoClose: false, // L'alert non si chiude automaticamente
-          closeButton: true,
-          closeOnClick: false,
-          draggable: false,
-          position: "top-center"
-        });
-        
-        handleCloseModal(); // Chiudiamo il modal dopo il successo
-        return { 
-          success: true, 
-          studentId: response.data.data._id,
-          needsClass: true 
-        };
+
+      if (student) {
+        await updateStudent(student._id, studentData);
+      } else {
+        await addStudent(studentData);
       }
-      return { success: false, message: response.data.message };
+      
+      onClose();
     } catch (error) {
-      console.error('Errore salvataggio studente:', error);
-      console.error('Response data:', error.response?.data);
-      
-      const errorMessage = error.response?.data?.message || 'Errore durante il salvataggio dello studente';
-      toast.error(errorMessage);
-      
-      return { 
-        success: false, 
-        message: errorMessage 
-      };
+      console.error('Errore durante il salvataggio:', error);
     }
   };
 
@@ -131,30 +83,6 @@ const StudentModal = ({ isOpen, onClose, student, schoolConfig, userId, onSubmit
     }
     return [1, 2, 3, 4, 5];
   };
-
-  const assignStudentToClass = async (studentId, classData) => {
-    try {
-      const updatePayload = {
-        classId: classData.classId,
-        section: classData.section
-      };
-  
-      const response = await axios.patch(`/api/students/${studentId}/assign-class`, updatePayload);
-  
-      if (response.data.success) {
-        toast.success('Studente assegnato alla classe con successo');
-        toast.dismiss(); // Rimuoviamo l'alert precedente
-        return { success: true };
-      }
-      return { success: false, message: response.data.message };
-    } catch (error) {
-      console.error('Errore assegnazione classe:', error);
-      toast.error('Errore durante l\'assegnazione della classe');
-      return { success: false, message: error.response?.data?.message };
-    }
-  };
-
-
 
   return (
     <Dialog 
@@ -174,109 +102,137 @@ const StudentModal = ({ isOpen, onClose, student, schoolConfig, userId, onSubmit
         </Box>
       </DialogTitle>
 
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit(onSubmit)}>
         <DialogContent>
-          {error && (
+          {Object.keys(errors).length > 0 && (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
+              Si prega di compilare tutti i campi obbligatori
             </Alert>
           )}
           
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6}>
-              <TextField
-                required
-                fullWidth
-                label="Nome"
+              <Controller
                 name="firstName"
-                value={formData.firstName}
-                onChange={handleChange}
-                disabled={isSubmitting}
+                control={control}
+                rules={{ required: 'Il nome è obbligatorio' }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Nome"
+                    error={!!errors.firstName}
+                    helperText={errors.firstName?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <TextField
-                required
-                fullWidth
-                label="Cognome"
+              <Controller
                 name="lastName"
-                value={formData.lastName}
-                onChange={handleChange}
-                disabled={isSubmitting}
+                control={control}
+                rules={{ required: 'Il cognome è obbligatorio' }}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    label="Cognome"
+                    error={!!errors.lastName}
+                    helperText={errors.lastName?.message}
+                    disabled={isSubmitting}
+                  />
+                )}
               />
             </Grid>
             <Grid item xs={12}>
-              <FormControl component="fieldset" required>
-                <Typography variant="subtitle2" gutterBottom>
-                  Genere
-                </Typography>
-                <RadioGroup
-                  row
-                  name="gender"
-                  value={formData.gender}
-                  onChange={handleChange}
-                >
-                  <FormControlLabel 
-                    value="M" 
-                    control={<Radio />} 
-                    label="Maschio"
-                    disabled={isSubmitting}
-                  />
-                  <FormControlLabel 
-                    value="F" 
-                    control={<Radio />} 
-                    label="Femmina"
-                    disabled={isSubmitting}
-                  />
-                </RadioGroup>
-              </FormControl>
+              <Controller
+                name="gender"
+                control={control}
+                rules={{ required: 'Il genere è obbligatorio' }}
+                render={({ field }) => (
+                  <FormControl component="fieldset" error={!!errors.gender}>
+                    <Typography variant="subtitle2" gutterBottom>
+                      Genere
+                    </Typography>
+                    <RadioGroup {...field} row>
+                      <FormControlLabel 
+                        value="M" 
+                        control={<Radio />} 
+                        label="Maschio"
+                        disabled={isSubmitting}
+                      />
+                      <FormControlLabel 
+                        value="F" 
+                        control={<Radio />} 
+                        label="Femmina"
+                        disabled={isSubmitting}
+                      />
+                    </RadioGroup>
+                  </FormControl>
+                )}
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Classe</InputLabel>
-                <Select
-                  name="number"
-                  value={formData.number}
-                  onChange={handleChange}
-                  label="Classe"
-                  disabled={isSubmitting}
-                >
-                  {generateClassOptions().map((year) => (
-                    <MenuItem key={year} value={year}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Controller
+                name="number"
+                control={control}
+                rules={{ required: 'La classe è obbligatoria' }}
+                render={({ field }) => (
+                  <FormControl fullWidth error={!!errors.number}>
+                    <InputLabel>Classe</InputLabel>
+                    <Select
+                      {...field}
+                      label="Classe"
+                      disabled={isSubmitting}
+                    >
+                      {generateClassOptions().map((year) => (
+                        <MenuItem key={year} value={year.toString()}>
+                          {year}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <FormControl fullWidth required>
-                <InputLabel>Sezione</InputLabel>
-                <Select
-                  name="section"
-                  value={formData.section}
-                  onChange={handleChange}
-                  label="Sezione"
-                  disabled={isSubmitting}
-                >
-                  {schoolConfig?.sezioni_disponibili?.map((section) => (
-                    <MenuItem key={section} value={section}>
-                      {section}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Controller
+                name="section"
+                control={control}
+                rules={{ required: 'La sezione è obbligatoria' }}
+                render={({ field }) => (
+                  <FormControl fullWidth error={!!errors.section}>
+                    <InputLabel>Sezione</InputLabel>
+                    <Select
+                      {...field}
+                      label="Sezione"
+                      disabled={isSubmitting}
+                    >
+                      {schoolConfig?.sezioni_disponibili?.map((section) => (
+                        <MenuItem key={section} value={section}>
+                          {section}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+              />
             </Grid>
             <Grid item xs={12}>
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                label="Note (opzionale)"
+              <Controller
                 name="note"
-                value={formData.note}
-                onChange={handleChange}
-                disabled={isSubmitting}
+                control={control}
+                render={({ field }) => (
+                  <TextField
+                    {...field}
+                    fullWidth
+                    multiline
+                    rows={3}
+                    label="Note (opzionale)"
+                    disabled={isSubmitting}
+                  />
+                )}
               />
             </Grid>
           </Grid>

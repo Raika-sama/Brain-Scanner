@@ -29,18 +29,15 @@ const handleError = (dispatch, error, customMessage) => {
 // Selectors
 export const selectors = {
   getStudentsByClass: (state, classId) => 
-    state.students.filter(s => s.class?._id === classId),
+    state.students.filter(s => s.classId?._id === classId),
   
   getFilteredStudents: (state, filters) => {
     let filtered = state.students;
     if (filters.year) {
-      filtered = filtered.filter(s => s.year === filters.year);
+      filtered = filtered.filter(s => s.classId?.year === filters.year);
     }
     if (filters.section) {
       filtered = filtered.filter(s => s.section === filters.section);
-    }
-    if (filters.institutionType) {
-      filtered = filtered.filter(s => s.institutionType === filters.institutionType);
     }
     if (filters.searchTerm) {
       const term = filters.searchTerm.toLowerCase();
@@ -111,7 +108,13 @@ const appReducer = (state, action) => {
         ...state,
         students: action.payload.map(student => ({
           ...student,
-          teachers: student.teachers || []
+          classId: student.classId,  // Manteniamo esplicito il mapping dei campi principali
+          needsClassAssignment: student.needsClassAssignment,
+          gender: student.gender,
+          section: student.section,
+          firstName: student.firstName,
+          lastName: student.lastName,
+          notes: student.notes
         }))
       };
 
@@ -133,50 +136,48 @@ const appReducer = (state, action) => {
         schoolConfig: action.payload
       };
 
-    case 'ADD_STUDENT':
-      const { student, classId } = action.payload;
-      return {
-        ...state,
-        students: [...state.students, {
-          ...student,
-          teachers: student.teachers || []
-        }],
-        classes: state.classes.map(cls => 
-          cls._id === classId 
-            ? { 
-                ...cls, 
-                students: [...(cls.students || []), student._id] 
-              }
-            : cls
-        )
-      };
-
-    case 'UPDATE_STUDENT':
-      return {
-        ...state,
-        students: state.students.map(student =>
-          student._id === action.payload._id 
-            ? {
-                ...action.payload,
-                teachers: action.payload.teachers || []
-              }
-            : student
-        )
-      };
-
-    case 'DELETE_STUDENT':
-      return {
-        ...state,
-        students: state.students.filter(student => 
-          student._id !== action.payload
-        ),
-        classes: state.classes.map(cls => ({
-          ...cls,
-          students: cls.students?.filter(id => 
-            id !== action.payload
-          ) || []
-        }))
-      };
+      case 'ADD_STUDENT':
+        const { student, classId } = action.payload;
+        return {
+          ...state,
+          students: [...state.students, {
+            ...student
+          }],
+          classes: state.classes.map(cls => 
+            cls._id === classId 
+              ? { 
+                  ...cls, 
+                  students: [...(cls.students || []), student._id] 
+                }
+              : cls
+          )
+        };
+  
+      case 'UPDATE_STUDENT':
+            return {
+              ...state,
+              students: state.students.map(student =>
+                student._id === action.payload._id 
+                  ? {
+                      ...action.payload
+                    }
+                  : student
+              )
+            };
+      
+      case 'DELETE_STUDENT':
+            return {
+              ...state,
+              students: state.students.filter(student => 
+                student._id !== action.payload
+              ),
+              classes: state.classes.map(cls => ({
+                ...cls,
+                students: cls.students?.filter(id => 
+                  id !== action.payload
+                ) || []
+              }))
+            };
 
     case 'ADD_CLASS':
       return {
@@ -211,15 +212,10 @@ const appReducer = (state, action) => {
 };
 // Helper functions per le operazioni CRUD
 const studentOperations = {
-  fetchStudents: async (dispatch, teacherId) => {
+  fetchStudents: async (dispatch) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.get('/api/students', {
-        params: {
-          teacherId,
-          includeTeachers: true
-        }
-      });
+      const response = await axios.get('/api/students/school/assigned');
       
       if (response.data.success) {
         dispatch({ type: 'SET_STUDENTS', payload: response.data.data });
@@ -386,6 +382,10 @@ const userOperations = {
     dispatch({ type: 'SET_USER', payload: updatedUser });
   }
 };
+
+
+
+
 
 // Provider Component
 export const AppProvider = ({ children }) => {

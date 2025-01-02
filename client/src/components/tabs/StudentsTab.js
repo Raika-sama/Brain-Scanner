@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
-  Button,
   Paper,
   Table,
   TableBody,
@@ -13,15 +12,9 @@ import {
   IconButton,
   Typography,
   Fade,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   CircularProgress,
 } from '@mui/material';
 import {
-  Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
 } from '@mui/icons-material';
@@ -29,59 +22,34 @@ import { useApp } from '../../context/AppContext';
 
 const StudentsTab = ({ students = [], loading = false, onEditStudent, showActions = true }) => {
   const navigate = useNavigate();
-  const { dispatch } = useApp();
-  const [openDialog, setOpenDialog] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [formData, setFormData] = useState({  // Aggiunto formData che mancava nella definizione
-    firstName: '',
-    lastName: '',
-  });
+  const { 
+    state,
+    selectors: { getFilteredStudents },
+    deleteStudent  // Aggiungiamo questo dal context
+  } = useApp();
+
+  // Aggiorniamo i filtri per allinearli con il context
   const [filters, setFilters] = useState({
     year: '',
     section: '',
-    institutionType: ''
+    searchTerm: ''  // Aggiunto per il supporto della ricerca
   });
 
-  // Filtra gli studenti in base ai filtri attivi
-  const filteredStudents = students.filter(student => {
-    if (filters.year && student.year !== filters.year) return false;
-    if (filters.section && student.section !== filters.section) return false;
-    return true;
-  });
+  // Usiamo il selector del context invece del filtro locale
+  const filteredStudents = getFilteredStudents(state, filters);
 
   // Handler per il click sullo studente
   const handleStudentClick = (studentId) => {
     navigate(`/students/${studentId}`);
   };
 
-  // Handlers per il dialog di aggiunta/modifica
-  const handleOpenDialog = (student = null) => {
-    if (student) {
-      setFormData({
-        firstName: student.firstName,
-        lastName: student.lastName,
-      });
-      setSelectedStudent(student);
-    } else {
-      setFormData({ firstName: '', lastName: '' });
-      setSelectedStudent(null);
+  const handleDelete = async (studentId) => {
+    try {
+      await deleteStudent(studentId);
+      // Il context si occuperà di aggiornare lo state
+    } catch (error) {
+      console.error('Errore durante l\'eliminazione dello studente:', error);
     }
-    setOpenDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setSelectedStudent(null);
-    setFormData({ firstName: '', lastName: '' });
-  };
-
-  const handleSubmit = () => {
-    console.log('Saving student:', formData);
-    handleCloseDialog();
-  };
-
-  const handleDelete = (studentId) => {
-    console.log('Deleting student:', studentId);
   };
 
   if (loading) {
@@ -94,7 +62,6 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
 
   return (
     <Box sx={{ position: 'relative' }}>
-      {/* Header con pulsante aggiungi */}
       <Box sx={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -106,7 +73,6 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
         </Typography>
       </Box>
 
-      {/* Tabella Studenti */}
       <Fade in timeout={500}>
         <TableContainer 
           component={Paper} 
@@ -121,6 +87,8 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
               <TableRow sx={{ backgroundColor: 'primary.lighter' }}>
                 <TableCell>Nome</TableCell>
                 <TableCell>Cognome</TableCell>
+                <TableCell>Classe</TableCell>
+                <TableCell>Sezione</TableCell>
                 {showActions && <TableCell align="right">Azioni</TableCell>}
               </TableRow>
             </TableHead>
@@ -147,6 +115,12 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
                   </TableCell>
                   <TableCell onClick={() => handleStudentClick(student._id)}>
                     {student.lastName}
+                  </TableCell>
+                  <TableCell>
+                    {student.classId?.year || 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    {student.section || 'N/A'}
                   </TableCell>
                   {showActions && (
                     <TableCell align="right">
@@ -176,7 +150,7 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
               ))}
               {filteredStudents.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={showActions ? 3 : 2} align="center">
+                  <TableCell colSpan={showActions ? 5 : 4} align="center">
                     Nessuno studente trovato
                   </TableCell>
                 </TableRow>
@@ -185,59 +159,6 @@ const StudentsTab = ({ students = [], loading = false, onEditStudent, showAction
           </Table>
         </TableContainer>
       </Fade>
-
-      {/* Dialog per aggiunta/modifica studente */}
-      <Dialog 
-        open={openDialog} 
-        onClose={handleCloseDialog}
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            minWidth: 400
-          }
-        }}
-      >
-        <DialogTitle>
-          {selectedStudent ? 'Modifica Studente' : 'Nuovo Studente'}
-        </DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 2 }}>
-            <TextField
-              fullWidth
-              label="Nome"
-              value={formData.firstName}
-              onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Cognome"
-              value={formData.lastName}
-              onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ p: 3 }}>
-          <Button 
-            onClick={handleCloseDialog}
-            sx={{ color: 'text.secondary' }}
-          >
-            Annulla
-          </Button>
-          <Button 
-            variant="contained"
-            onClick={handleSubmit}
-            sx={{
-              backgroundColor: 'primary.light',
-              '&:hover': {
-                backgroundColor: 'primary.main',
-              }
-            }}
-          >
-            {selectedStudent ? 'Salva' : 'Aggiungi'}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 };

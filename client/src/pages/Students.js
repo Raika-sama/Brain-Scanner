@@ -1,5 +1,5 @@
 // client/src/pages/Students.js
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
     Box, 
     Paper, 
@@ -12,14 +12,11 @@ import { Add as AddIcon } from '@mui/icons-material';
 import StudentsTab from '../components/tabs/StudentsTab';
 import StudentModal from '../components/StudentModal';
 import { useApp } from '../context/AppContext';
-import { studentService } from '../services/studentService';
 
 const Students = () => {
-    const { state } = useApp();
+    const { state, fetchStudents, addStudent } = useApp();
     const [showModal, setShowModal] = useState(false);
     const [selectedStudent, setSelectedStudent] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [students, setStudents] = useState([]);
 
     const userData = useMemo(() => {
         if (!state.user) return null;
@@ -36,22 +33,12 @@ const Students = () => {
         };
     }, [userData?.school]);
 
-    useEffect(() => {
-        const loadStudents = async () => {
-            if (!userData?.school?._id) {
-                setLoading(false);
-                return;
-            }
-            
-            const result = await studentService.fetchStudents();
-            if (result.success) {
-                setStudents(result.data);
-            }
-            setLoading(false);
-        };
-
-        loadStudents();
-    }, [userData?.school?._id]);
+    // Usiamo useEffect per caricare gli studenti quando il componente viene montato
+    React.useEffect(() => {
+        if (userData?.school?._id) {
+            fetchStudents();
+        }
+    }, [userData?.school?._id, fetchStudents]);
 
     const handleOpenModal = () => {
         if (!userData?._id) {
@@ -66,17 +53,36 @@ const Students = () => {
     };
 
     const handleSubmit = async (studentData) => {
-        const result = await studentService.createStudent(studentData);
-        if (result.success) {
-            setStudents(prev => [...prev, result.data]);
-            setShowModal(false);
+        try {
+            // Prepara i dati dello studente includendo schoolId e mainTeacher
+            const studentPayload = {
+                ...studentData,
+                schoolId: schoolConfig._id,
+                mainTeacher: userData._id,
+                isActive: true
+            };
+
+            // Usa addStudent dal context invece di studentService
+            const result = await addStudent(studentPayload);
+            
+            if (result.success) {
+                setShowModal(false);
+                return result;
+            }
+            return result;
+        } catch (error) {
+            console.error('Errore durante l\'aggiunta dello studente:', error);
+            return { 
+                success: false, 
+                message: error.message || 'Errore durante l\'aggiunta dello studente' 
+            };
         }
-        return result;
     };
 
+    // Usa gli studenti direttamente dallo state del context
     const filteredStudents = useMemo(() => {
-        return students.filter(student => student.isActive);
-    }, [students]);
+        return state.students.filter(student => student.isActive);
+    }, [state.students]);
 
     return (
         <Container maxWidth="xl">
@@ -127,7 +133,7 @@ const Students = () => {
                 <Paper sx={{ p: 3 }}>
                     <StudentsTab 
                         students={filteredStudents}
-                        loading={loading}
+                        loading={state.loading}
                         onEditStudent={(student) => {
                             setSelectedStudent(student);
                             setShowModal(true);
