@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { Loader2 } from 'lucide-react';
 
 const Login = () => {
-  const { login, isLoading, error: authError } = useAuth();
+  const { login, isLoading, isSubmitting, error: authError } = useAuth();
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -117,7 +117,7 @@ const Login = () => {
               : 'bg-blue-600 hover:bg-blue-700 focus:ring-4 focus:ring-blue-200'
           }`}
       >
-        {isLoading ? (
+        {isLoading || isSubmitting ? (
           <>
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             Accesso in corso...

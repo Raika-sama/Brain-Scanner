@@ -9,9 +9,12 @@ export const useAuth = () => {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
 
+ 
   // Verifica automatica dello stato di autenticazione all'avvio
   useEffect(() => {
     const verifyAuth = async () => {
@@ -20,13 +23,13 @@ export const useAuth = () => {
         setIsLoading(true);
         try {
           const response = await axios.get('/api/users/me');
-          dispatch({ type: 'SET_USER', payload: response.data.user });
+          dispatch({ type: 'SET_USER', payload: response.data.user });  // Usa dispatch
         } catch (err) {
           console.error('Verifica auth fallita:', err);
           localStorage.removeItem('token');
           localStorage.removeItem('userData');
           localStorage.removeItem('rememberMe');
-          dispatch({ type: 'SET_USER', payload: null });
+          dispatch({ type: 'SET_USER', payload: null });  // Usa dispatch
         } finally {
           setIsLoading(false);
         }
@@ -54,11 +57,10 @@ export const useAuth = () => {
         localStorage.setItem('rememberMe', 'true');
       }
 
-      dispatch({ type: 'SET_USER', payload: user });
+      dispatch({ type: 'SET_USER', payload: user });  // Usa dispatch
       
       toast.success('Login effettuato con successo!');
       
-      // Reindirizza alla pagina precedente se disponibile
       const from = location.state?.from?.pathname || '/dashboard';
       navigate(from, { replace: true });
       
@@ -85,7 +87,7 @@ export const useAuth = () => {
       localStorage.setItem('token', token);
       localStorage.setItem('userData', JSON.stringify(user));
       
-      dispatch({ type: 'SET_USER', payload: user });
+      dispatch({ type: 'SET_USER', payload: user });  // Usa dispatch
       
       toast.success('Registrazione effettuata con successo!');
       navigate('/dashboard');
@@ -101,17 +103,16 @@ export const useAuth = () => {
       setIsLoading(false);
     }
   }, [dispatch, navigate]);
-
+  
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('userData');
     localStorage.removeItem('rememberMe');
-    dispatch({ type: 'SET_USER', payload: null });
+    dispatch({ type: 'SET_USER', payload: null });  // Usa dispatch
     toast.success('Logout effettuato con successo');
     navigate('/login');
   }, [dispatch, navigate]);
 
-  // Funzione per verificare se l'utente è autenticato
   const isAuthenticated = useCallback(() => {
     return !!state.user;
   }, [state.user]);

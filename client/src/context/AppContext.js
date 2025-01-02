@@ -103,20 +103,14 @@ const appReducer = (state, action) => {
         error: null
       };
 
-    case 'SET_STUDENTS':
-      return {
-        ...state,
-        students: action.payload.map(student => ({
-          ...student,
-          classId: student.classId,  // Manteniamo esplicito il mapping dei campi principali
-          needsClassAssignment: student.needsClassAssignment,
-          gender: student.gender,
-          section: student.section,
-          firstName: student.firstName,
-          lastName: student.lastName,
-          notes: student.notes
-        }))
-      };
+      case 'SET_STUDENTS':
+        return {
+          ...state,
+          students: action.payload.map(student => ({
+            ...student,
+            classId: student.classId
+          }))
+        };
 
     case 'SET_CLASSES':
       return {
@@ -232,10 +226,7 @@ const studentOperations = {
   addStudent: async (dispatch, studentData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/api/students', {
-        ...studentData,
-        teachers: studentData.teachers || []
-      });
+      const response = await axios.post('/api/students', studentData);
 
       if (response.data.success) {
         dispatch({
@@ -365,53 +356,54 @@ const classOperations = {
 
 // User operations
 const userOperations = {
-  setUser: (dispatch, userData) => {
-    localStorage.setItem('userData', JSON.stringify(userData));
-    dispatch({ type: 'SET_USER', payload: userData });
-  },
-  
-  clearUser: (dispatch) => {
-    localStorage.removeItem('userData');
-    dispatch({ type: 'SET_USER', payload: null });
-  },
-  
   updateUser: (dispatch, updates) => {
     const currentUser = JSON.parse(localStorage.getItem('userData'));
     const updatedUser = { ...currentUser, ...updates };
-    localStorage.setItem('userData', JSON.stringify(updatedUser));
     dispatch({ type: 'SET_USER', payload: updatedUser });
   }
 };
 
 
-
+const useApp = () => {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
 
 
 // Provider Component
 export const AppProvider = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  const value = {
+  const contextValue = {
     state,
-    dispatch,
-    ...studentOperations,
-    ...classOperations,
-    ...userOperations,
+    dispatch, // Esportiamo dispatch direttamente
+
+    // Studenti
+    fetchStudents: async () => await studentOperations.fetchStudents(dispatch),
+    addStudent: async (studentData) => await studentOperations.addStudent(dispatch, studentData),
+    updateStudent: async (studentId, studentData) => await studentOperations.updateStudent(dispatch, studentId, studentData),
+    deleteStudent: async (studentId) => await studentOperations.deleteStudent(dispatch, studentId),
+    
+    // Classi
+    fetchClasses: async () => await classOperations.fetchClasses(dispatch),
+    addClass: async (classData) => await classOperations.addClass(dispatch, classData),
+    updateClass: async (classId, classData) => await classOperations.updateClass(dispatch, classId, classData),
+    deleteClass: async (classId) => await classOperations.deleteClass(dispatch, classId),
+    
+    // User
+    updateUser: (updates) => userOperations.updateUser(dispatch, updates),
+    
+    // Selectors rimangono invariati
     selectors
   };
 
   return (
-    <AppContext.Provider value={value}>
+    <AppContext.Provider value={contextValue}>
       {children}
     </AppContext.Provider>
   );
 };
-
-// Custom hook
-export function useApp() {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
-}
+export { useApp };
