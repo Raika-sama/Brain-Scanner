@@ -7,12 +7,12 @@ const { validateRequest } = require('../middleware/validateRequest');
 
 // Validazioni base per studente
 const studentValidations = [
-    body('nome')
+    body('firstName')
         .trim()
         .notEmpty().withMessage('Il nome è obbligatorio')
         .isLength({ min: 2 }).withMessage('Il nome deve essere di almeno 2 caratteri'),
     
-    body('cognome')
+    body('lastName')
         .trim()
         .notEmpty().withMessage('Il cognome è obbligatorio')
         .isLength({ min: 2 }).withMessage('Il cognome deve essere di almeno 2 caratteri'),
@@ -22,20 +22,27 @@ const studentValidations = [
         .notEmpty().withMessage('Il genere è obbligatorio')
         .isIn(['M', 'F']).withMessage('Il genere deve essere M o F'),
     
-    body('number')
-        .notEmpty().withMessage('Il numero della classe è obbligatorio')
-        .isInt({ min: 1, max: 5 }).withMessage('Il numero della classe deve essere tra 1 e 5'),
-    
+    body('mainTeacher')
+        .notEmpty().withMessage('ID insegnante principale obbligatorio')
+        .isMongoId().withMessage('ID insegnante non valido'),
+
     body('section')
         .notEmpty().withMessage('La sezione è obbligatoria')
         .matches(/^[A-Z]$/).withMessage('La sezione deve essere una lettera maiuscola'),
     
-    // Note è opzionale
+    body('schoolId')   // aggiunto
+        .notEmpty().withMessage('ID scuola obbligatorio')
+        .isMongoId().withMessage('ID scuola non valido'),
+    
+    body('classId')    // aggiunto
+        .notEmpty().withMessage('ID classe obbligatorio')
+        .isMongoId().withMessage('ID classe non valido'),
+        // Note è opzionale
     body('note')
         .optional()
         .trim()
         .isString().withMessage('Le note devono essere una stringa')
-];
+    ];
 
 // Validazioni per ricerca e filtri
 const searchValidations = [

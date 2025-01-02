@@ -1,6 +1,7 @@
 const Class = require('../models/Class');
 const School = require('../models/Schools');
-const ClassService = require('../services/classService');
+const Student = require('../models/Student');
+const mongoose = require('mongoose');
 
 const classController = {
     // GET - Ottieni tutte le classi
@@ -9,17 +10,17 @@ const classController = {
             const query = { 
                 schoolId: req.user.schoolId,
                 $or: [
-                    { teacherId: req.user._id },
+                    { mainTeacher: req.user._id },
                     { teachers: req.user._id }
                 ]
             };
             
             const classes = await Class.find(query)
-                .populate('schoolId', 'name type')
-                .populate('students', 'nome cognome')
-                .populate('teacherId', 'firstName lastName email')
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('students', 'firstName lastName')
+                .populate('mainTeacher', 'firstName lastName email')
                 .populate('teachers', 'firstName lastName email')
-                .sort({ number: 1, section: 1 });
+                .sort({ year: 1, section: 1 });
     
             res.json({
                 success: true,
@@ -41,13 +42,13 @@ const classController = {
                 _id: req.params.id,
                 schoolId: req.user.schoolId,
                 $or: [
-                    { teacherId: req.user._id },
+                    { mainTeacher: req.user._id },
                     { teachers: req.user._id }
                 ]
             })
-                .populate('schoolId', 'name type')
-                .populate('students', 'nome cognome')
-                .populate('teacherId', 'firstName lastName email')
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('students', 'firstName lastName')
+                .populate('mainTeacher', 'firstName lastName email')
                 .populate('teachers', 'firstName lastName email');
 
             if (!classe) {
@@ -72,144 +73,163 @@ const classController = {
 
     // POST - Crea una nuova classe
     createClass: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-            const { number, section } = req.body;
-            const schoolYear = ClassService.getCurrentSchoolYear();
+            const { year, section, academicYear } = req.body;
     
             // Verifica se la classe esiste già
             const existingClass = await Class.findOne({
-                number,
+                year,
                 section,
-                schoolYear,
-                schoolId: req.user.schoolId,
-                $or: [
-                    { teacherId: req.user._id },
-                    { teachers: req.user._id }
-                ]
-            });
+                academicYear,
+                schoolId: req.user.schoolId
+            }).session(session);
     
             if (existingClass) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Questa classe esiste già per questa scuola e anno scolastico'
-                });
+                throw new Error('Questa classe esiste già per questa scuola e anno accademico');
             }
     
-            const newClass = await Class.create({
-                number,
+            const newClass = await Class.create([{
+                year,
                 section,
-                schoolYear,
+                academicYear,
                 schoolId: req.user.schoolId,
-                teacherId: req.user._id,     // Impostiamo l'utente corrente come teacher principale
-                teachers: [req.user._id]     // Lo aggiungiamo anche all'array dei teachers
-            });
+                mainTeacher: req.user._id,
+                teachers: [req.user._id],
+                isActive: true,
+                students: []
+            }], { session });
             
             // Popola i dati per la risposta
-            const populatedClass = await Class.findById(newClass._id)
-                .populate('schoolId', 'name type')
-                .populate('teacherId', 'firstName lastName email')
-                .populate('teachers', 'firstName lastName email');
+            const populatedClass = await Class.findById(newClass[0]._id)
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('mainTeacher', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email')
+                .session(session);
             
+            await session.commitTransaction();
+
             res.status(201).json({
                 success: true,
                 data: populatedClass
             });
         } catch (error) {
+            await session.abortTransaction();
             console.error('Errore in createClass:', error);
             res.status(400).json({
                 success: false,
                 message: error.message || 'Errore nella creazione della classe'
             });
+        } finally {
+            session.endSession();
         }
     },
 
     // PUT - Aggiorna una classe esistente
     updateClass: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-            // Rimuoviamo teacherId dal body se presente per evitare modifiche non autorizzate
             const updateData = { ...req.body };
-            delete updateData.teacherId;
+            delete updateData.mainTeacher; // Protezione dal cambio del mainTeacher
             
             const updatedClass = await Class.findOneAndUpdate(
                 {
                     _id: req.params.id,
                     schoolId: req.user.schoolId,
                     $or: [
-                        { teacherId: req.user._id },
+                        { mainTeacher: req.user._id },
                         { teachers: req.user._id }
                     ]
                 },
                 updateData,
-                { new: true, runValidators: true }
+                { new: true, runValidators: true, session }
             )
-            .populate('schoolId', 'name type')
-            .populate('students', 'nome cognome')
-            .populate('teacherId', 'firstName lastName email')
+            .populate('schoolId', 'nome tipo_istituto')
+            .populate('students', 'firstName lastName')
+            .populate('mainTeacher', 'firstName lastName email')
             .populate('teachers', 'firstName lastName email');
 
             if (!updatedClass) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Classe non trovata o non hai i permessi per modificarla'
-                });
+                throw new Error('Classe non trovata o non hai i permessi per modificarla');
             }
 
+            await session.commitTransaction();
             res.json({
                 success: true,
                 data: updatedClass
             });
         } catch (error) {
+            await session.abortTransaction();
             console.error('Errore in updateClass:', error);
             res.status(400).json({
                 success: false,
                 message: error.message || 'Errore nell\'aggiornamento della classe'
             });
+        } finally {
+            session.endSession();
         }
     },
 
     // DELETE - Elimina una classe
     deleteClass: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
         try {
-            const deletedClass = await Class.findOneAndDelete({
+            const classe = await Class.findOne({
                 _id: req.params.id,
                 schoolId: req.user.schoolId,
-                teacherId: req.user._id  // Solo il teacher principale può eliminare la classe
-            });
+                mainTeacher: req.user._id
+            }).session(session);
 
-            if (!deletedClass) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Classe non trovata o non hai i permessi per eliminarla'
-                });
+            if (!classe) {
+                throw new Error('Classe non trovata o non hai i permessi per eliminarla');
             }
 
+            // Rimuovi il riferimento alla classe da tutti gli studenti
+            await Student.updateMany(
+                { classId: classe._id },
+                { $unset: { classId: "" } },
+                { session }
+            );
+
+            // Elimina la classe
+            await classe.remove({ session });
+            
+            await session.commitTransaction();
             res.json({
                 success: true,
                 message: 'Classe eliminata con successo'
             });
         } catch (error) {
+            await session.abortTransaction();
             console.error('Errore in deleteClass:', error);
             res.status(500).json({
                 success: false,
                 message: error.message || 'Errore nell\'eliminazione della classe'
             });
+        } finally {
+            session.endSession();
         }
     },
 
-    // Aggiungi un teacher alla classe
-    addTeacher: async (req, res) => {
+    // POST - Aggiorna l'anno accademico
+    updateAcademicYear: async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
-            const { teacherId } = req.body;
+            const { academicYear } = req.body;
             
-            // Verifica che l'utente corrente sia il teacher principale o un teacher esistente
             const classe = await Class.findOne({
                 _id: req.params.id,
                 schoolId: req.user.schoolId,
                 $or: [
-                    { teacherId: req.user._id },
+                    { mainTeacher: req.user._id },
                     { teachers: req.user._id }
                 ]
             }).session(session);
@@ -218,103 +238,388 @@ const classController = {
                 throw new Error('Classe non trovata o permessi insufficienti');
             }
 
-            // Verifica che il teacher da aggiungere non sia già presente
-            if (classe.teachers.includes(teacherId)) {
-                throw new Error('Il teacher è già assegnato a questa classe');
-            }
-
-            // Aggiungi il nuovo teacher
-            classe.teachers.push(teacherId);
+            classe.academicYear = academicYear;
             await classe.save({ session });
 
-            // Popola i dati per la risposta
-            const updatedClass = await Class.findById(classe._id)
-                .populate('schoolId', 'name type')
-                .populate('teacherId', 'firstName lastName email')
-                .populate('teachers', 'firstName lastName email')
-                .session(session);
+            // Aggiorna anche l'anno accademico degli studenti associati
+            await Student.updateMany(
+                { classId: classe._id },
+                { academicYear: academicYear },
+                { session }
+            );
 
             await session.commitTransaction();
+
+            const updatedClass = await Class.findById(classe._id)
+                .populate('schoolId', 'nome tipo_istituto')
+                .populate('students', 'firstName lastName')
+                .populate('mainTeacher', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email');
 
             res.json({
                 success: true,
                 data: updatedClass,
-                message: 'Teacher aggiunto con successo'
+                message: 'Anno accademico aggiornato con successo'
             });
-
         } catch (error) {
             await session.abortTransaction();
-            console.error('Errore in addTeacher:', error);
             res.status(400).json({
                 success: false,
-                message: error.message || 'Errore nell\'aggiunta del teacher'
+                message: error.message || 'Errore nell\'aggiornamento dell\'anno accademico'
             });
         } finally {
             session.endSession();
         }
     },
 
-    // Rimuovi un teacher dalla classe
-    removeTeacher: async (req, res) => {
+    // POST - Aggiungi studenti alla classe
+    addStudents: async (req, res) => {
         const session = await mongoose.startSession();
         session.startTransaction();
 
         try {
-            const teacherIdToRemove = req.params.teacherId;
-
-            // Verifica che l'utente corrente sia il teacher principale
+            const { studentIds } = req.body;
+            
             const classe = await Class.findOne({
                 _id: req.params.id,
                 schoolId: req.user.schoolId,
-                teacherId: req.user._id  // Solo il teacher principale può rimuovere altri teacher
+                $or: [
+                    { mainTeacher: req.user._id },
+                    { teachers: req.user._id }
+                ]
             }).session(session);
 
             if (!classe) {
                 throw new Error('Classe non trovata o permessi insufficienti');
             }
 
-            // Non permettere la rimozione del teacher principale
-            if (teacherIdToRemove === classe.teacherId.toString()) {
-                throw new Error('Non puoi rimuovere il teacher principale');
-            }
-
-            // Verifica che il teacher da rimuovere sia effettivamente assegnato
-            if (!classe.teachers.includes(teacherIdToRemove)) {
-                throw new Error('Il teacher non è assegnato a questa classe');
-            }
-
-            // Rimuovi il teacher
-            classe.teachers = classe.teachers.filter(
-                id => id.toString() !== teacherIdToRemove
-            );
+            // Aggiungi gli studenti alla classe
+            classe.students.addToSet(...studentIds);
             await classe.save({ session });
 
-            // Popola i dati per la risposta
-            const updatedClass = await Class.findById(classe._id)
-                .populate('schoolId', 'name type')
-                .populate('teacherId', 'firstName lastName email')
-                .populate('teachers', 'firstName lastName email')
-                .session(session);
+            // Aggiorna gli studenti con il riferimento alla classe
+            await Student.updateMany(
+                { _id: { $in: studentIds } },
+                { 
+                    classId: classe._id,
+                    section: classe.section,
+                    academicYear: classe.academicYear
+                },
+                { session }
+            );
 
             await session.commitTransaction();
+
+            const updatedClass = await Class.findById(classe._id)
+                .populate('students', 'firstName lastName')
+                .populate('mainTeacher', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email');
 
             res.json({
                 success: true,
                 data: updatedClass,
-                message: 'Teacher rimosso con successo'
+                message: 'Studenti aggiunti con successo'
             });
-
         } catch (error) {
             await session.abortTransaction();
-            console.error('Errore in removeTeacher:', error);
             res.status(400).json({
                 success: false,
-                message: error.message || 'Errore nella rimozione del teacher'
+                message: error.message || 'Errore nell\'aggiunta degli studenti'
             });
         } finally {
             session.endSession();
         }
+    },
+
+    // DELETE - Rimuovi uno studente dalla classe
+    removeStudent: async (req, res) => {
+        const session = await mongoose.startSession();
+        session.startTransaction();
+
+        try {
+            const { studentId } = req.params;
+
+            const classe = await Class.findOne({
+                _id: req.params.id,
+                schoolId: req.user.schoolId,
+                $or: [
+                    { mainTeacher: req.user._id },
+                    { teachers: req.user._id }
+                ]
+            }).session(session);
+
+            if (!classe) {
+                throw new Error('Classe non trovata o permessi insufficienti');
+            }
+
+            // Rimuovi lo studente dalla classe
+            classe.students.pull(studentId);
+            await classe.save({ session });
+
+            // Rimuovi il riferimento alla classe dallo studente
+            await Student.updateOne(
+                { _id: studentId },
+                { $unset: { classId: "" } },
+                { session }
+            );
+
+            await session.commitTransaction();
+
+            const updatedClass = await Class.findById(classe._id)
+                .populate('students', 'firstName lastName')
+                .populate('mainTeacher', 'firstName lastName email')
+                .populate('teachers', 'firstName lastName email');
+
+            res.json({
+                success: true,
+                data: updatedClass,
+                message: 'Studente rimosso con successo'
+            });
+        } catch (error) {
+            await session.abortTransaction();
+            res.status(400).json({
+                success: false,
+                message: error.message || 'Errore nella rimozione dello studente'
+            });
+        } finally {
+            session.endSession();
+        }
+    },
+
+   // POST - Aggiungi un insegnante alla classe
+   addTeacher: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { teacherId } = req.body;
+        
+        // Verifica che l'utente corrente sia il mainTeacher o un teacher esistente
+        const classe = await Class.findOne({
+            _id: req.params.id,
+            schoolId: req.user.schoolId,
+            $or: [
+                { mainTeacher: req.user._id },
+                { teachers: req.user._id }
+            ]
+        }).session(session);
+
+        if (!classe) {
+            throw new Error('Classe non trovata o permessi insufficienti');
+        }
+
+        // Verifica che il teacher da aggiungere non sia già presente
+        if (classe.teachers.includes(teacherId)) {
+            throw new Error('L\'insegnante è già assegnato a questa classe');
+        }
+
+        // Aggiungi il nuovo teacher
+        classe.teachers.push(teacherId);
+        await classe.save({ session });
+
+        // Popola i dati per la risposta
+        const updatedClass = await Class.findById(classe._id)
+            .populate('schoolId', 'nome tipo_istituto')
+            .populate('mainTeacher', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email')
+            .session(session);
+
+        await session.commitTransaction();
+
+        res.json({
+            success: true,
+            data: updatedClass,
+            message: 'Insegnante aggiunto con successo'
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Errore in addTeacher:', error);
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Errore nell\'aggiunta dell\'insegnante'
+        });
+    } finally {
+        session.endSession();
     }
+},
+
+// DELETE - Rimuovi un insegnante dalla classe
+removeTeacher: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const teacherIdToRemove = req.params.teacherId;
+
+        // Verifica che l'utente corrente sia il mainTeacher
+        const classe = await Class.findOne({
+            _id: req.params.id,
+            schoolId: req.user.schoolId,
+            mainTeacher: req.user._id  // Solo il mainTeacher può rimuovere altri insegnanti
+        }).session(session);
+
+        if (!classe) {
+            throw new Error('Classe non trovata o permessi insufficienti');
+        }
+
+        // Non permettere la rimozione del mainTeacher
+        if (teacherIdToRemove === classe.mainTeacher.toString()) {
+            throw new Error('Non puoi rimuovere l\'insegnante principale');
+        }
+
+        // Verifica che l'insegnante da rimuovere sia effettivamente assegnato
+        if (!classe.teachers.includes(teacherIdToRemove)) {
+            throw new Error('L\'insegnante non è assegnato a questa classe');
+        }
+
+        // Rimuovi l'insegnante
+        classe.teachers = classe.teachers.filter(
+            id => id.toString() !== teacherIdToRemove
+        );
+        await classe.save({ session });
+
+        // Popola i dati per la risposta
+        const updatedClass = await Class.findById(classe._id)
+            .populate('schoolId', 'nome tipo_istituto')
+            .populate('mainTeacher', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email')
+            .session(session);
+
+        await session.commitTransaction();
+
+        res.json({
+            success: true,
+            data: updatedClass,
+            message: 'Insegnante rimosso con successo'
+        });
+
+    } catch (error) {
+        await session.abortTransaction();
+        console.error('Errore in removeTeacher:', error);
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Errore nella rimozione dell\'insegnante'
+        });
+    } finally {
+        session.endSession();
+    }
+},
+
+// POST - Aggiungi studenti alla classe
+addStudents: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { studentIds } = req.body;
+        
+        const classe = await Class.findOne({
+            _id: req.params.id,
+            schoolId: req.user.schoolId,
+            $or: [
+                { mainTeacher: req.user._id },
+                { teachers: req.user._id }
+            ]
+        }).session(session);
+
+        if (!classe) {
+            throw new Error('Classe non trovata o permessi insufficienti');
+        }
+
+        // Aggiungi gli studenti alla classe
+        classe.students.push(...studentIds);
+        await classe.save({ session });
+
+        // Aggiorna anche gli studenti con il riferimento alla classe
+        await Student.updateMany(
+            { _id: { $in: studentIds } },
+            { 
+                classId: classe._id,
+                year: classe.year,
+                section: classe.section,
+                academicYear: classe.academicYear
+            },
+            { session }
+        );
+
+        await session.commitTransaction();
+
+        const updatedClass = await Class.findById(classe._id)
+            .populate('students', 'firstName lastName')
+            .populate('mainTeacher', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email');
+
+        res.json({
+            success: true,
+            data: updatedClass,
+            message: 'Studenti aggiunti con successo'
+        });
+    } catch (error) {
+        await session.abortTransaction();
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Errore nell\'aggiunta degli studenti'
+        });
+    } finally {
+        session.endSession();
+    }
+},
+
+// PUT - Aggiorna l'anno accademico della classe
+updateAcademicYear: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const { academicYear } = req.body;
+        
+        const classe = await Class.findOne({
+            _id: req.params.id,
+            schoolId: req.user.schoolId,
+            $or: [
+                { mainTeacher: req.user._id },
+                { teachers: req.user._id }
+            ]
+        }).session(session);
+
+        if (!classe) {
+            throw new Error('Classe non trovata o permessi insufficienti');
+        }
+
+        // Aggiorna l'anno accademico
+        classe.academicYear = academicYear;
+        await classe.save({ session });
+
+        // Aggiorna anche l'anno accademico degli studenti associati
+        await Student.updateMany(
+            { classId: classe._id },
+            { academicYear: academicYear },
+            { session }
+        );
+
+        await session.commitTransaction();
+
+        const updatedClass = await Class.findById(classe._id)
+            .populate('students', 'firstName lastName')
+            .populate('mainTeacher', 'firstName lastName email')
+            .populate('teachers', 'firstName lastName email');
+
+        res.json({
+            success: true,
+            data: updatedClass,
+            message: 'Anno accademico aggiornato con successo'
+        });
+    } catch (error) {
+        await session.abortTransaction();
+        res.status(400).json({
+            success: false,
+            message: error.message || 'Errore nell\'aggiornamento dell\'anno accademico'
+        });
+    } finally {
+        session.endSession();
+    }
+}
 };
 
-module.exports = classController;
+module.exports = classController; 

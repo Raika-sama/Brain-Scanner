@@ -7,7 +7,7 @@ const { validateRequest } = require('../middleware/validateRequest');
 
 // Validazioni per la classe
 const classValidations = [
-    body('number')
+    body('year')
         .notEmpty().withMessage('Il numero della classe è obbligatorio')
         .isInt({ min: 1, max: 5 }).withMessage('Il numero della classe deve essere tra 1 e 5'),
     
@@ -18,6 +18,14 @@ const classValidations = [
     body('schoolId')
         .notEmpty().withMessage('ID scuola obbligatorio')
         .isMongoId().withMessage('ID scuola non valido'),
+    
+        body('academicYear')  // aggiunto
+        .notEmpty().withMessage('Anno accademico obbligatorio')
+        .matches(/^\d{4}\/\d{4}$/).withMessage('Formato anno accademico non valido (es: 2024/2025)'),
+    
+    body('mainTeacher')   // aggiunto
+        .notEmpty().withMessage('Insegnante principale obbligatorio')
+        .isMongoId().withMessage('ID insegnante non valido'),
     
     // Non includiamo teacherId nelle validazioni perché viene gestito automaticamente dal controller
 ];
