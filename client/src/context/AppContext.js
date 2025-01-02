@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useReducer } from 'react';
 import axios from 'axios';
 
+const AppContext = createContext();
+
 // Definizione dello stato iniziale
 const initialState = {
+  user: JSON.parse(localStorage.getItem('userData')) || null,// Aggiungi questo
   students: [],
   classes: [],
   schoolConfig: null,
@@ -10,11 +13,17 @@ const initialState = {
   error: null
 };
 
-// Creazione del Context
-const AppContext = createContext();
+
 // Reducer per gestire le azioni
 const appReducer = (state, action) => {
   switch (action.type) {
+    case 'SET_USER':
+    console.log('Setting user in reducer:', action.payload);  
+     // Se i dati sono nidificati, prendi l'oggetto user interno
+    return {
+        ...state,
+        user: action.payload
+      };
     case 'SET_LOADING':
       return {
         ...state,
@@ -96,6 +105,10 @@ const appReducer = (state, action) => {
       return state;
   }
 };
+
+
+
+
 // Helper functions per le operazioni CRUD
 const addStudent = async (dispatch, studentData) => {
   try {
@@ -122,6 +135,26 @@ const addStudent = async (dispatch, studentData) => {
       }
     }
 
+    const userOperations = {
+      setUser: (dispatch, userData) => {
+        localStorage.setItem('userData', JSON.stringify(userData));
+        dispatch({ type: 'SET_USER', payload: userData });
+      },
+      
+      clearUser: (dispatch) => {
+        localStorage.removeItem('userData');
+        dispatch({ type: 'SET_USER', payload: null });
+      },
+      
+      updateUser: (dispatch, updates) => {
+        const currentUser = JSON.parse(localStorage.getItem('userData'));
+        const updatedUser = { ...currentUser, ...updates };
+        localStorage.setItem('userData', JSON.stringify(updatedUser));
+        dispatch({ type: 'SET_USER', payload: updatedUser });
+      }
+    };
+
+
     // Creiamo lo studente con i campi teacher
     const studentResponse = await axios.post('http://localhost:5000/api/students', {
       ...studentData,
@@ -130,28 +163,28 @@ const addStudent = async (dispatch, studentData) => {
       teachers: studentData.teachers || []
     });
 
-    if (studentResponse.data.success) {
-      dispatch({
-        type: 'ADD_STUDENT',
-        payload: {
-          student: studentResponse.data.data,
-          classId
+        if (studentResponse.data.success) {
+          dispatch({
+            type: 'ADD_STUDENT',
+            payload: {
+              student: studentResponse.data.data,
+              classId
+            }
+          });
+          return studentResponse.data.data;
+        } else {
+          throw new Error(studentResponse.data.message || 'Errore nella creazione dello studente');
         }
-      });
-      return studentResponse.data.data;
-    } else {
-      throw new Error(studentResponse.data.message || 'Errore nella creazione dello studente');
-    }
-  } catch (error) {
-    dispatch({ 
-      type: 'SET_ERROR', 
-      payload: error.response?.data?.message || error.message || 'Errore nella creazione dello studente' 
-    });
-    throw error;
-  } finally {
-    dispatch({ type: 'SET_LOADING', payload: false });
-  }
-};
+      } catch (error) {
+        dispatch({ 
+          type: 'SET_ERROR', 
+          payload: error.response?.data?.message || error.message || 'Errore nella creazione dello studente' 
+        });
+        throw error;
+      } finally {
+        dispatch({ type: 'SET_LOADING', payload: false });
+      }
+    };
 
 const updateStudent = async (dispatch, studentId, studentData) => {
   try {
@@ -279,15 +312,11 @@ export const AppProvider = ({ children }) => {
   );
 };
 
-// Custom hook per usare il context
-export const useApp = () => {
+export function useApp() {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');
   }
   return context;
-};
-
-// Esportiamo tutto ciò che potrebbe servire
-export { AppContext, appReducer };
+}
 

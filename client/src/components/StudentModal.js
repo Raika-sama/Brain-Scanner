@@ -5,16 +5,12 @@ import { Card } from "./ui/card";
 import { toast } from 'react-hot-toast';
 import axios from '../utils/axios';
 
-
-const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
-  const { user } = useAuth();
-
-  useEffect(() => {
-    if (schoolConfig && !schoolConfig._id) {
-      console.error('schoolConfig non contiene _id:', schoolConfig);
-    }
-  }, [schoolConfig]);  
+const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig, userId }) => {
+  console.log('6. Modal props:', { isOpen, student, schoolConfig, userId });
   
+  // 1. TUTTI GLI USESTATE
+  const [userData, setUserData] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
   const [formData, setFormData] = useState({
     nome: '',
     cognome: '',
@@ -25,32 +21,50 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
     teacherId: '',
     teachers: []
   });
-
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [existingClasses, setExistingClasses] = useState([]);
   const [shouldCreateNewClass, setShouldCreateNewClass] = useState(false);
   const [isCheckingClass, setIsCheckingClass] = useState(false);
 
-  const getCurrentSchoolYear = () => {
-    const now = new Date();
-    const currentYear = now.getFullYear();
-    const currentMonth = now.getMonth() + 1;
-    
-    if (currentMonth >= 9) {
-      return `${currentYear}/${currentYear + 1}`;
-    } else {
-      return `${currentYear - 1}/${currentYear}`;
-    }
-  };
-
+  // 2. USEMEMO
   const schoolOptions = useMemo(() => ({
     classi: Array.from(
       { length: schoolConfig?.tipo_istituto === 'primo_grado' ? 3 : 5 }, 
       (_, i) => ({ id: (i + 1).toString(), name: (i + 1).toString() })
     ),
-    sezioni: schoolConfig?.sezioni_disponibili.map(s => ({ id: s, name: s })) || []
+    sezioni: schoolConfig?.sezioni_disponibili?.map(s => ({ id: s, name: s })) || []
   }), [schoolConfig]);
+
+  // 3. TUTTI GLI USEEFFECT
+  useEffect(() => {
+    const user = JSON.parse(localStorage.getItem('userData'));
+    if (user && user._id) {
+      setUserData(user);
+      setIsInitialized(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userData) return;
+    
+    setFormData({
+      nome: student?.nome || '',
+      cognome: student?.cognome || '',
+      gender: student?.gender || '',
+      number: student?.number || '',
+      section: student?.section || '',
+      note: student?.note || '',
+      teacherId: student?.teacherId || userData._id || '',
+      teachers: student?.teachers || [userData._id]
+    });
+  }, [student, userData]);
+
+  useEffect(() => {
+    if (schoolConfig && !schoolConfig._id) {
+      console.error('schoolConfig non contiene _id:', schoolConfig);
+    }
+  }, [schoolConfig]);
 
   useEffect(() => {
     const fetchClasses = async () => {
@@ -75,19 +89,6 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
   }, [isOpen, schoolConfig._id]);
 
   useEffect(() => {
-    setFormData({
-      nome: student?.nome || '',
-      cognome: student?.cognome || '',
-      gender: student?.gender || '',
-      number: student?.number || '',
-      section: student?.section || '',
-      note: student?.note || '',
-      teacherId: student?.teacherId || user?._id || '',
-      teachers: student?.teachers || (user?._id ? [user._id] : [])
-    });
-  }, [student, user]);
-
-  useEffect(() => {
     const checkClassExists = async () => {
       if (!formData.number || !formData.section) return;
       
@@ -105,6 +106,20 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
 
     checkClassExists();
   }, [formData.number, formData.section, existingClasses]);
+
+  // 4. FUNZIONI AUSILIARIE
+  const getCurrentSchoolYear = () => {
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    
+    if (currentMonth >= 9) {
+      return `${currentYear}/${currentYear + 1}`;
+    } else {
+      return `${currentYear - 1}/${currentYear}`;
+    }
+  };
+
   const validateForm = () => {
     const newErrors = {};
     if (!formData.nome.trim()) newErrors.nome = 'Il nome è obbligatorio';
@@ -138,8 +153,8 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
           section: formData.section.toUpperCase(),
           schoolYear: getCurrentSchoolYear(),
           schoolId: schoolConfig._id,
-          teacherId: user._id,
-          teachers: [user._id]
+          teacherId: userId,
+          teachers: [userId]
         };
 
         const createClass = window.confirm(
@@ -148,20 +163,12 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
 
         if (createClass) {
           try {
-            console.log('Invio richiesta POST a /api/classes con dati:', classData);
             const newClassResponse = await axios.post('/api/classes', classData);
-            console.log('Risposta creazione classe:', newClassResponse.data);
             if (newClassResponse.data.success) {
               classId = newClassResponse.data.data._id;
             }
           } catch (classError) {
-            console.error('Dettagli errore creazione classe:', {
-              message: classError.message,
-              response: classError.response?.data,
-              status: classError.response?.status,
-              data: classData
-            });
-            
+            console.error('Errore creazione classe:', classError);
             toast.error(classError.response?.data?.message || 'Errore durante la creazione della classe');
             setIsLoading(false);
             return;
@@ -181,8 +188,8 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
         schoolYear: getCurrentSchoolYear(),
         schoolId: schoolConfig._id,
         note: formData.note || '',
-        teacherId: student ? student.teacherId : user._id,
-        teachers: student ? student.teachers : [user._id]
+        teacherId: student ? student.teacherId : userData._id,
+        teachers: student ? student.teachers : [userData._id]
       };
 
       if (classId) {
@@ -204,7 +211,15 @@ const StudentModal = ({ isOpen, onClose, student, onSubmit, schoolConfig }) => {
       setIsLoading(false);
     }
   };
+
+  // 5. EARLY RETURN
   if (!isOpen) return null;
+
+
+  // Il return del JSX viene dopo...
+
+
+
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
