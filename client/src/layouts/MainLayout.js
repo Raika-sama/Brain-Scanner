@@ -1,9 +1,8 @@
-// client/src/layouts/MainLayout.js
 import React, { useState, useEffect, Suspense } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion'; // Nuovo import
-import { Menu, User, LogOut, Settings, Bell } from 'lucide-react';
-import axios from 'axios';
+import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Menu, User, LogOut, Home } from 'lucide-react';
+
 import Sidebar from '../components/Sidebar';
 import { ErrorBoundary } from 'react-error-boundary';
 import { useAuth } from '../hooks/useAuth';
@@ -23,12 +22,14 @@ const LoadingSpinner = () => (
 const MainLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user: userData, logout, isLoading } = useAuth(); // Usiamo useAuth invece dello state locale
+  const { user: userData, logout, isLoading } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-
-  
+  // Chiudiamo il menu utente quando cambia il percorso
+  useEffect(() => {
+    setIsUserMenuOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -108,7 +109,15 @@ const MainLayout = () => {
                     <p className="text-sm font-medium text-gray-700">Account</p>
                     <p className="text-xs text-gray-500 truncate">{userData.email}</p>
                   </div>
-                  
+                  {/* Link al profilo */}
+                  <Link
+                    to="/profile"
+                    onClick={() => setIsUserMenuOpen(false)}
+                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 transition-colors duration-200 hover:bg-gray-100"
+                  >
+                    <User className="w-4 h-4 mr-2" />
+                    Account
+                  </Link>
                   <motion.button
                     whileHover={{ backgroundColor: '#FEE2E2' }}
                     onClick={handleLogout}

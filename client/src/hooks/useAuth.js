@@ -9,12 +9,9 @@ export const useAuth = () => {
   const { state, dispatch } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
 
- 
   // Verifica automatica dello stato di autenticazione all'avvio
   useEffect(() => {
     const verifyAuth = async () => {
@@ -22,14 +19,16 @@ export const useAuth = () => {
       if (token) {
         setIsLoading(true);
         try {
-          const response = await axios.get('/api/users/me');
-          dispatch({ type: 'SET_USER', payload: response.data.user });  // Usa dispatch
+          const { data } = await axios.get('/api/users/me');
+          if (data.success && data.user) {
+            dispatch({ type: 'SET_USER', payload: data.user });
+          }
         } catch (err) {
           console.error('Verifica auth fallita:', err);
           localStorage.removeItem('token');
           localStorage.removeItem('userData');
           localStorage.removeItem('rememberMe');
-          dispatch({ type: 'SET_USER', payload: null });  // Usa dispatch
+          dispatch({ type: 'SET_USER', payload: null });
         } finally {
           setIsLoading(false);
         }
@@ -44,28 +43,30 @@ export const useAuth = () => {
     setError(null);
 
     try {
-      const loginResponse = await axios.post('/api/auth/login', {
+      const { data } = await axios.post('/api/auth/login', {
         email,
         password
       });
 
-      const { token, user } = loginResponse.data;
+      if (data.success && data.token && data.user) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        if (rememberMe) {
+          localStorage.setItem('rememberMe', 'true');
+        }
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('userData', JSON.stringify(user));
-      if (rememberMe) {
-        localStorage.setItem('rememberMe', 'true');
+        dispatch({ type: 'SET_USER', payload: data.user });
+        
+        toast.success('Login effettuato con successo!');
+        
+        // Reindirizza alla pagina precedente se disponibile
+        const from = location.state?.from?.pathname || '/dashboard';
+        navigate(from, { replace: true });
+        
+        return data.user;
+      } else {
+        throw new Error('Dati di login non validi');
       }
-
-      dispatch({ type: 'SET_USER', payload: user });  // Usa dispatch
-      
-      toast.success('Login effettuato con successo!');
-      
-      const from = location.state?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true });
-      
-      return user;
-
     } catch (err) {
       const message = err.response?.data?.message || 'Errore durante il login';
       setError(message);
@@ -81,19 +82,21 @@ export const useAuth = () => {
     setError(null);
 
     try {
-      const response = await axios.post('/api/auth/register', userData);
-      const { token, user } = response.data;
+      const { data } = await axios.post('/api/auth/register', userData);
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('userData', JSON.stringify(user));
-      
-      dispatch({ type: 'SET_USER', payload: user });  // Usa dispatch
-      
-      toast.success('Registrazione effettuata con successo!');
-      navigate('/dashboard');
-      
-      return user;
-
+      if (data.success && data.token && data.user) {
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('userData', JSON.stringify(data.user));
+        
+        dispatch({ type: 'SET_USER', payload: data.user });
+        
+        toast.success('Registrazione effettuata con successo!');
+        navigate('/dashboard');
+        
+        return data.user;
+      } else {
+        throw new Error('Errore durante la registrazione');
+      }
     } catch (err) {
       const message = err.response?.data?.message || 'Errore durante la registrazione';
       setError(message);
@@ -103,12 +106,12 @@ export const useAuth = () => {
       setIsLoading(false);
     }
   }, [dispatch, navigate]);
-  
+
   const logout = useCallback(() => {
     localStorage.removeItem('token');
     localStorage.removeItem('userData');
     localStorage.removeItem('rememberMe');
-    dispatch({ type: 'SET_USER', payload: null });  // Usa dispatch
+    dispatch({ type: 'SET_USER', payload: null });
     toast.success('Logout effettuato con successo');
     navigate('/login');
   }, [dispatch, navigate]);

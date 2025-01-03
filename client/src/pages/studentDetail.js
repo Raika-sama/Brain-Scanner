@@ -1,6 +1,6 @@
 // client/src/pages/StudentDetails.js
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
   Paper,
@@ -29,68 +29,101 @@ import AlertMessage from '../components/ui/AlertMessage';
 import { format } from 'date-fns';
 import { it } from 'date-fns/locale';
 
-// Componente TabPanel riutilizzato
-const TabPanel = ({ children, value, index, ...props }) => (
-  <Fade in={value === index} timeout={500}>
-    <Box
-      role="tabpanel"
-      hidden={value !== index}
-      id={`student-tabpanel-${index}`}
-      {...props}
-      sx={{ pt: 3 }}
-    >
-      {value === index && children}
-    </Box>
-  </Fade>
-);
-
 const StudentDetails = () => {
   const { id } = useParams();
-  const { state } = useApp();
+  const navigate = useNavigate();
+  const { state, fetchStudentById } = useApp();
+  
   const [currentTab, setCurrentTab] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [studentData, setStudentData] = useState(null);
-  const [schoolData, setSchoolData] = useState(null);
   const [classData, setClassData] = useState(null);
-  const [mainTeacherData, setMainTeacherData] = useState(null);
+  const [schoolData, setSchoolData] = useState(null);
   const [teachersData, setTeachersData] = useState([]);
 
-  useEffect(() => {
-    // Trova lo studente e tutti i dati correlati
-    const student = state.students.find(s => s._id === id && s.isActive);
-    if (student) {
-      setStudentData(student);
-      
-      // Trova la scuola
-      const school = state.schools.find(s => s._id === student.schoolId);
-      setSchoolData(school);
-      
-      // Trova la classe
-      const class_ = state.classes.find(c => c._id === student.classId);
-      setClassData(class_);
-      
-      // Trova l'insegnante principale
-      const mainTeacher = state.teachers.find(t => t._id === student.mainTeacher);
-      setMainTeacherData(mainTeacher);
-      
-      // Trova tutti gli insegnanti
-      const teachers = state.teachers.filter(t => 
-        student.teachers.includes(t._id)
-      );
-      setTeachersData(teachers);
+  // Separiamo il caricamento dei dati correlati in una funzione separata
+  const loadRelatedData = (student) => {
+    if (!student) return;
+
+    // Carica i dati della classe
+    if (student.classId) {
+      const classInfo = state.classes?.find(c => c._id === student.classId);
+      setClassData(classInfo || { year: 'N/A', section: 'N/A' });
     }
-  }, [id, state]);
 
-  if (state.loading) {
-    return <LoadingSpinner />;
-  }
+    // Carica i dati della scuola
+    if (student.schoolId) {
+      const school = state.schools?.find(s => s._id === student.schoolId);
+      setSchoolData(school || { name: 'N/A' });
+    }
 
-  if (!studentData || !studentData.isActive) {
-    return <AlertMessage severity="error" message="Studente non trovato o non attivo" />;
-  }
-
-  const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue);
+    // Carica i dati degli insegnanti
+    if (student.teachers?.length) {
+      const teachers = state.teachers?.filter(t => student.teachers.includes(t._id));
+      setTeachersData(teachers || []);
+    }
   };
+
+  // Primo useEffect per caricare lo studente
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadStudent = async () => {
+      if (!id) return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Prima cerca nello state
+        let student = state.students.find(s => s._id === id);
+
+        if (!student) {
+          // Se non lo trova nello state, carica dal server
+          try {
+            const result = await fetchStudentById(id);
+            if (result.success && isMounted) {
+              student = result.data;
+            }
+          } catch (err) {
+            if (isMounted) {
+              console.error('Error fetching student:', err);
+              setError('Studente non trovato');
+            }
+            return;
+          }
+        }
+
+        if (isMounted && student) {
+          setStudentData(student);
+          loadRelatedData(student);
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadStudent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, fetchStudentById]); // Rimuovi state.students dalle dipendenze
+
+
+
+
+  
+  // useEffect separato per aggiornare i dati correlati quando cambiano gli state correlati
+  useEffect(() => {
+    if (studentData) {
+      loadRelatedData(studentData);
+    }
+  }, [state.classes, state.schools, state.teachers]);
+
   return (
     <Box sx={{ p: 4, maxWidth: 1400, margin: '0 auto' }}>
       {/* Header dello studente */}

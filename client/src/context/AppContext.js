@@ -9,7 +9,6 @@ const initialState = {
   students: [],
   classes: [],
   schoolConfig: null,
-  currentClass: null,
   loading: false,
   error: null
 };
@@ -26,30 +25,6 @@ const handleError = (dispatch, error, customMessage) => {
   return errorMessage;
 };
 
-// Selectors
-export const selectors = {
-  getStudentsByClass: (state, classId) => 
-    state.students.filter(s => s.classId?._id === classId),
-  
-  getFilteredStudents: (state, filters) => {
-    let filtered = state.students;
-    if (filters.year) {
-      filtered = filtered.filter(s => s.classId?.year === filters.year);
-    }
-    if (filters.section) {
-      filtered = filtered.filter(s => s.section === filters.section);
-    }
-    if (filters.searchTerm) {
-      const term = filters.searchTerm.toLowerCase();
-      filtered = filtered.filter(s => 
-        s.firstName.toLowerCase().includes(term) ||
-        s.lastName.toLowerCase().includes(term)
-      );
-    }
-    return filtered;
-  }
-};
-
 // Reducer
 const appReducer = (state, action) => {
   switch (action.type) {
@@ -59,6 +34,7 @@ const appReducer = (state, action) => {
         loading: true,
         error: null
       };
+
     case 'AUTH_SUCCESS':
       return {
         ...state,
@@ -66,17 +42,18 @@ const appReducer = (state, action) => {
         loading: false,
         error: null
       };
+
     case 'AUTH_ERROR':
       return {
         ...state,
         loading: false,
         error: action.payload
       };
+
     case 'LOGOUT':
       return {
         ...state,
-        user: null,
-        
+        user: null
       };
     
     case 'SET_USER':
@@ -103,25 +80,16 @@ const appReducer = (state, action) => {
         error: null
       };
 
-      case 'SET_STUDENTS':
-        return {
-          ...state,
-          students: action.payload.map(student => ({
-            ...student,
-            classId: student.classId
-          }))
-        };
+    case 'SET_STUDENTS':
+      return {
+        ...state,
+        students: action.payload
+      };
 
     case 'SET_CLASSES':
       return {
         ...state,
         classes: action.payload
-      };
-
-    case 'SET_CURRENT_CLASS':
-      return {
-        ...state,
-        currentClass: action.payload
       };
 
     case 'SET_SCHOOL_CONFIG':
@@ -130,81 +98,12 @@ const appReducer = (state, action) => {
         schoolConfig: action.payload
       };
 
-      case 'ADD_STUDENT':
-        const { student, classId } = action.payload;
-        return {
-          ...state,
-          students: [...state.students, {
-            ...student
-          }],
-          classes: state.classes.map(cls => 
-            cls._id === classId 
-              ? { 
-                  ...cls, 
-                  students: [...(cls.students || []), student._id] 
-                }
-              : cls
-          )
-        };
-  
-      case 'UPDATE_STUDENT':
-            return {
-              ...state,
-              students: state.students.map(student =>
-                student._id === action.payload._id 
-                  ? {
-                      ...action.payload
-                    }
-                  : student
-              )
-            };
-      
-      case 'DELETE_STUDENT':
-            return {
-              ...state,
-              students: state.students.filter(student => 
-                student._id !== action.payload
-              ),
-              classes: state.classes.map(cls => ({
-                ...cls,
-                students: cls.students?.filter(id => 
-                  id !== action.payload
-                ) || []
-              }))
-            };
-
-    case 'ADD_CLASS':
-      return {
-        ...state,
-        classes: [...state.classes, action.payload]
-      };
-
-    case 'UPDATE_CLASS':
-      return {
-        ...state,
-        classes: state.classes.map(cls =>
-          cls._id === action.payload._id
-            ? action.payload
-            : cls
-        )
-      };
-
-    case 'DELETE_CLASS':
-      return {
-        ...state,
-        classes: state.classes.filter(cls => 
-          cls._id !== action.payload
-        ),
-        students: state.students.filter(student => 
-          student.class?._id !== action.payload
-        )
-      };
-
     default:
       return state;
   }
 };
-// Helper functions per le operazioni CRUD
+
+// Helper functions per le operazioni base
 const studentOperations = {
   fetchStudents: async (dispatch) => {
     try {
@@ -218,66 +117,6 @@ const studentOperations = {
       }
     } catch (error) {
       handleError(dispatch, error, 'Errore nel caricamento degli studenti');
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  },
-
-  addStudent: async (dispatch, studentData) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/api/students', studentData);
-
-      if (response.data.success) {
-        dispatch({
-          type: 'ADD_STUDENT',
-          payload: {
-            student: response.data.data,
-            classId: studentData.classId
-          }
-        });
-        return response.data.data;
-      }
-    } catch (error) {
-      handleError(dispatch, error, 'Errore nella creazione dello studente');
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  },
-
-  updateStudent: async (dispatch, studentId, studentData) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.put(`/api/students/${studentId}`, studentData);
-      
-      if (response.data.success) {
-        dispatch({
-          type: 'UPDATE_STUDENT',
-          payload: response.data.data
-        });
-        return response.data.data;
-      }
-    } catch (error) {
-      handleError(dispatch, error, 'Errore nell\'aggiornamento dello studente');
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  },
-
-  deleteStudent: async (dispatch, studentId) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.delete(`/api/students/${studentId}`);
-      
-      if (response.data.success) {
-        dispatch({ type: 'DELETE_STUDENT', payload: studentId });
-        return true;
-      }
-    } catch (error) {
-      handleError(dispatch, error, 'Errore nella eliminazione dello studente');
-      throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -300,110 +139,53 @@ const classOperations = {
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
-  },
-
-  addClass: async (dispatch, classData) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.post('/api/classes', classData);
-      
-      if (response.data.success) {
-        dispatch({ type: 'ADD_CLASS', payload: response.data.data });
-        return response.data.data;
-      }
-    } catch (error) {
-      handleError(dispatch, error, 'Errore nella creazione della classe');
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  },
-
-  updateClass: async (dispatch, classId, classData) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.put(`/api/classes/${classId}`, classData);
-      
-      if (response.data.success) {
-        dispatch({ type: 'UPDATE_CLASS', payload: response.data.data });
-        return response.data.data;
-      }
-    } catch (error) {
-      handleError(dispatch, error, 'Errore nell\'aggiornamento della classe');
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  },
-
-  deleteClass: async (dispatch, classId) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await axios.delete(`/api/classes/${classId}`);
-      
-      if (response.data.success) {
-        dispatch({ type: 'DELETE_CLASS', payload: classId });
-        return true;
-      }
-    } catch (error) {
-      handleError(dispatch, error, 'Errore nella eliminazione della classe');
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
   }
 };
 
 // User operations
 const userOperations = {
+  setUser: (dispatch, userData) => {
+    localStorage.setItem('userData', JSON.stringify(userData));
+    dispatch({ type: 'SET_USER', payload: userData });
+  },
+  
+  clearUser: (dispatch) => {
+    localStorage.removeItem('userData');
+    dispatch({ type: 'SET_USER', payload: null });
+  },
+  
   updateUser: (dispatch, updates) => {
     const currentUser = JSON.parse(localStorage.getItem('userData'));
     const updatedUser = { ...currentUser, ...updates };
+    localStorage.setItem('userData', JSON.stringify(updatedUser));
     dispatch({ type: 'SET_USER', payload: updatedUser });
   }
 };
-
-
-const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
-  return context;
-};
-
 
 // Provider Component
 export const AppProvider = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
 
-  const contextValue = {
+  const value = {
     state,
-    dispatch, // Esportiamo dispatch direttamente
-
-    // Studenti
-    fetchStudents: async () => await studentOperations.fetchStudents(dispatch),
-    addStudent: async (studentData) => await studentOperations.addStudent(dispatch, studentData),
-    updateStudent: async (studentId, studentData) => await studentOperations.updateStudent(dispatch, studentId, studentData),
-    deleteStudent: async (studentId) => await studentOperations.deleteStudent(dispatch, studentId),
-    
-    // Classi
-    fetchClasses: async () => await classOperations.fetchClasses(dispatch),
-    addClass: async (classData) => await classOperations.addClass(dispatch, classData),
-    updateClass: async (classId, classData) => await classOperations.updateClass(dispatch, classId, classData),
-    deleteClass: async (classId) => await classOperations.deleteClass(dispatch, classId),
-    
-    // User
-    updateUser: (updates) => userOperations.updateUser(dispatch, updates),
-    
-    // Selectors rimangono invariati
-    selectors
+    dispatch,
+    ...studentOperations,
+    ...classOperations,
+    ...userOperations
   };
 
   return (
-    <AppContext.Provider value={contextValue}>
+    <AppContext.Provider value={value}>
       {children}
     </AppContext.Provider>
   );
 };
-export { useApp };
+
+// Custom hook
+export function useApp() {
+  const context = useContext(AppContext);
+  if (!context) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+}

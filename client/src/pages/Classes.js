@@ -6,7 +6,6 @@ import {
   Card, 
   CardContent, 
   Typography, 
-  Button,
   Paper,
   List,
   ListItem,
@@ -29,7 +28,7 @@ const StatCard = ({ icon: Icon, title, value, color, delay }) => (
     <Card 
       sx={{ 
         height: '100%',
-        backgroundColor: `${color}10`, // Colore pastello molto leggero
+        backgroundColor: `${color}10`,
         borderRadius: 3,
         transition: 'transform 0.2s, box-shadow 0.2s',
         '&:hover': {
@@ -46,7 +45,7 @@ const StatCard = ({ icon: Icon, title, value, color, delay }) => (
           </Typography>
         </Box>
         <Typography variant="h4" component="div" sx={{ color }}>
-          {value}
+          {value || 0}
         </Typography>
       </CardContent>
     </Card>
@@ -56,7 +55,7 @@ const StatCard = ({ icon: Icon, title, value, color, delay }) => (
 const Classes = () => {
   const navigate = useNavigate();
   const { state } = useApp();
-  const { classes, loading, error } = state;
+  const { loading, error } = state;
 
   // Handler per navigare ai dettagli della classe
   const handleClassClick = (classId) => {
@@ -73,7 +72,7 @@ const Classes = () => {
 
   return (
     <Box sx={{ p: 4, maxWidth: 1400, margin: '0 auto' }}>
-      {/* Header con info scuola */}
+      {/* Header */}
       <Fade in timeout={400}>
         <Paper 
           elevation={0} 
@@ -86,7 +85,7 @@ const Classes = () => {
           }}
         >
           <Typography variant="h4" sx={{ mb: 1 }}>
-            {state.schoolConfig?.name || 'Dashboard Classi'}
+            Dashboard Classi
           </Typography>
           <Typography variant="subtitle1">
             Anno Scolastico {new Date().getFullYear()}/{new Date().getFullYear() + 1}
@@ -100,7 +99,7 @@ const Classes = () => {
           <StatCard
             icon={SchoolIcon}
             title="Totale Classi"
-            value={classes.length}
+            value={0}
             color="#4CAF50"
             delay={100}
           />
@@ -109,7 +108,7 @@ const Classes = () => {
           <StatCard
             icon={PeopleIcon}
             title="Totale Studenti"
-            value={classes.reduce((acc, cls) => acc + (cls.students?.length || 0), 0)}
+            value={0}
             color="#2196F3"
             delay={200}
           />
@@ -118,7 +117,7 @@ const Classes = () => {
           <StatCard
             icon={AssignmentIcon}
             title="Test Completati"
-            value={state.schoolConfig?.completedTests || 0}
+            value={0}
             color="#FF9800"
             delay={300}
           />
@@ -139,33 +138,12 @@ const Classes = () => {
               Le tue classi
             </Typography>
             <List>
-              {classes.map((cls, index) => (
-                <ListItem
-                  key={cls._id}
-                  button
-                  onClick={() => handleClassClick(cls._id)}
-                  sx={{
-                    borderRadius: 2,
-                    mb: 1,
-                    backgroundColor: 'background.paper',
-                    transition: 'all 0.2s',
-                    '&:hover': {
-                      backgroundColor: 'action.hover',
-                      transform: 'translateX(8px)'
-                    }
-                  }}
-                >
-                  <ListItemText
-                    primary={
-                      <Typography variant="h6" color="primary">
-                        {`${cls.year}ª ${cls.section}`}
-                      </Typography>
-                    }
-                    secondary={`${cls.students?.length || 0} studenti`}
-                  />
-                  <ChevronRightIcon color="action" />
-                </ListItem>
-              ))}
+              {/* Lista vuota per ora */}
+              <ListItem sx={{ justifyContent: 'center' }}>
+                <Typography color="text.secondary">
+                  Nessuna classe disponibile
+                </Typography>
+              </ListItem>
             </List>
           </CardContent>
         </Card>
